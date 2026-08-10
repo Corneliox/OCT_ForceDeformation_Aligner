@@ -28,8 +28,8 @@ grid on;
 legend('Stratum Corneum', 'Epidermis');
 
 %% 3. Sesi Pemilihan Titik MAKSIMUM
-disp('--- SESI 1 ---');
-disp('Klik 2x pada grafik untuk menentukan batas KIRI dan KANAN area MAKSIMUM.');
+disp('--- SESSION 1 ---');
+disp('Click twice on the graph to define LEFT and RIGHT boundaries of the MAXIMUM area.');
 [x_max_klik, ~] = ginput(2);
 idx_awal_max = round(min(x_max_klik));
 idx_akhir_max = round(max(x_max_klik));

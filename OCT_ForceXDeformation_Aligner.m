@@ -16,35 +16,35 @@ function OCT_ForceXDeformation_Aligner()
     validPairs = {}; 
     
     % 2. CONTROL INTERFACE COMPONENTS
-    lblHeader = uilabel(fig, 'Text', sprintf('1. Pilih Parent Folder  |  NUM_CYCLES = %d', NUM_CYCLES), 'FontWeight', 'bold', 'FontSize', 14);
+    lblHeader = uilabel(fig, 'Text', sprintf('1. Select Parent Folder  |  NUM_CYCLES = %d', NUM_CYCLES), 'FontWeight', 'bold', 'FontSize', 14);
     
     btnBrowse = uibutton(fig, 'Text', 'Browse Folder', 'ButtonPushedFcn', @(btn,event) selectFolder());
-    lblFolder = uilabel(fig, 'Text', 'Tidak ada folder terpilih');
+    lblFolder = uilabel(fig, 'Text', 'No folder selected');
     
     % Controls for Waves (Default: 3 Waves) & Filter Mode (Default: 0 - Tanpa Filter)
-    lblWaves = uilabel(fig, 'Text', 'Jumlah Wave:', 'FontWeight', 'bold');
+    lblWaves = uilabel(fig, 'Text', 'Wave Count:', 'FontWeight', 'bold');
     ddlWaves = uidropdown(fig, 'Items', {'1 Wave', '2 Waves', '3 Waves', '4 Waves', '5 Waves'}, ...
         'ItemsData', [1, 2, 3, 4, 5], 'Value', NUM_CYCLES, ...
         'ValueChangedFcn', @(dd, event) changeWaves(dd.Value));
         
-    lblFilter = uilabel(fig, 'Text', 'Mode Filter:', 'FontWeight', 'bold');
-    ddlFilter = uidropdown(fig, 'Items', {'1. Tanpa Filter (Raw - Default)', '2. Dengan Filter (Savitzky-Golay)'}, ...
+    lblFilter = uilabel(fig, 'Text', 'Filter Mode:', 'FontWeight', 'bold');
+    ddlFilter = uidropdown(fig, 'Items', {'1. Raw Signal (Unfiltered - Default)', '2. Savitzky-Golay Filter'}, ...
         'ItemsData', [0, 1], 'Value', FILTER_MODE, ...
         'ValueChangedFcn', @(dd, event) changeFilter(dd.Value));
         
-    lblDPI = uilabel(fig, 'Text', 'Resolusi Export:', 'FontWeight', 'bold');
+    lblDPI = uilabel(fig, 'Text', 'Export DPI:', 'FontWeight', 'bold');
     ddlDPI = uidropdown(fig, 'Items', {'300 DPI (High Res - Default)', '600 DPI (Ultra High Res)', '150 DPI (Standard)'}, ...
         'ItemsData', [300, 600, 150], 'Value', EXPORT_DPI, ...
         'ValueChangedFcn', @(dd, event) changeDPI(dd.Value));
     
-    lblSamplesHeader = uilabel(fig, 'Text', '2. Daftar Sampel Terdeteksi:', 'FontWeight', 'bold');
+    lblSamplesHeader = uilabel(fig, 'Text', '2. Detected Sample List:', 'FontWeight', 'bold');
     lstSamples = uilistbox(fig);
     
-    btnProcess = uibutton(fig, 'Text', 'PROSES SEMUA SAMPEL', ...
+    btnProcess = uibutton(fig, 'Text', 'PROCESS ALL SAMPLES', ...
         'FontWeight', 'bold', 'FontSize', 16, 'BackgroundColor', [0.2 0.6 0.2], 'FontColor', 'w', ...
         'ButtonPushedFcn', @(btn,event) processSamples());
     
-    lblStatus = uilabel(fig, 'Text', 'Status: Menunggu input folder...', 'FontColor', 'b', 'FontSize', 14);
+    lblStatus = uilabel(fig, 'Text', 'Status: Waiting for folder selection...', 'FontColor', 'b', 'FontSize', 14);
     
     % 3. STANDARDIZED UI GRID — Row 1 and Row 2 are fixed (6 panels)
     ax_def_normal = uiaxes(fig); title(ax_def_normal, '1. Deformation (Red)');
@@ -78,7 +78,7 @@ function OCT_ForceXDeformation_Aligner()
 
     function changeWaves(val)
         NUM_CYCLES = val;
-        lblHeader.Text = sprintf('1. Pilih Parent Folder  |  NUM_CYCLES = %d', NUM_CYCLES);
+        lblHeader.Text = sprintf('1. Select Parent Folder  |  NUM_CYCLES = %d', NUM_CYCLES);
         fig.Name = sprintf('Generative Biomechanical Analyzer - %d-Cycle Edition', NUM_CYCLES);
         createCycleAxes(NUM_CYCLES);
         onWindowResize();
@@ -147,7 +147,7 @@ function OCT_ForceXDeformation_Aligner()
     
     %% Function: Select Folder
     function selectFolder() %% This is the function of Select Folder
-        selDir = uigetdir('', 'Pilih Parent Folder');
+        selDir = uigetdir('', 'Select Parent Folder');
         if selDir == 0, return; end
         parentDir = selDir;
         lblFolder.Text = parentDir;
@@ -168,10 +168,10 @@ function OCT_ForceXDeformation_Aligner()
                 validCount = validCount + 1;
                 if exist(octFile, 'file') && exist(forceFile, 'file')
                     tempPairs{validCount} = {baseName, octFile, forceFile};
-                    tempDisplay{validCount} = sprintf('[Siap] Sampel: %s', baseName);
+                    tempDisplay{validCount} = sprintf('[Ready] Sample: %s', baseName);
                 else
                     tempPairs{validCount} = {}; 
-                    tempDisplay{validCount} = sprintf('[Error] Data tidak lengkap: %s', baseName);
+                    tempDisplay{validCount} = sprintf('[Error] Incomplete Data: %s', baseName);
                 end
             end
         end
@@ -179,17 +179,17 @@ function OCT_ForceXDeformation_Aligner()
         validIdx = ~cellfun('isempty', tempPairs(1:validCount));
         validPairs = tempPairs(validIdx);
         lstSamples.Items = tempDisplay(1:validCount);
-        lblStatus.Text = sprintf('Status: %d sampel siap diproses.', length(validPairs));
+        lblStatus.Text = sprintf('Status: %d samples ready for processing.', length(validPairs));
     end
     
     %% Function: Process All Samples
     function processSamples()
         if isempty(validPairs)
-            uialert(fig, 'Tidak ada sampel valid!', 'Peringatan');
+            uialert(fig, 'No valid samples found!', 'Warning');
             return;
         end
         
-        outputMainDir = fullfile(parentDir, 'Hasil_Analisis');
+        outputMainDir = fullfile(parentDir, 'Analysis_Results');
         if ~exist(outputMainDir, 'dir'), mkdir(outputMainDir); end
         
         for i = 1:length(validPairs)
@@ -197,7 +197,7 @@ function OCT_ForceXDeformation_Aligner()
             octFile = validPairs{i}{2};
             forceFile = validPairs{i}{3};
             
-            lblStatus.Text = sprintf('Status: Sesi Anotasi untuk %s (%d/%d)...', baseName, i, length(validPairs));
+            lblStatus.Text = sprintf('Status: Annotation Session for %s (%d/%d)...', baseName, i, length(validPairs));
             drawnow; 
             
             outputSubDir = fullfile(outputMainDir, baseName);
@@ -206,11 +206,11 @@ function OCT_ForceXDeformation_Aligner()
             try
                 runAnalysisLogic(baseName, octFile, forceFile, outputSubDir);
             catch ME
-                warning('Gagal memproses %s: %s', baseName, ME.message);
+                warning('Failed to process %s: %s', baseName, ME.message);
             end
         end
-        lblStatus.Text = 'Status: SEMUA PROSES SELESAI.';
-        uialert(fig, 'Pemrosesan dan Ekstraksi Grafik Selesai!', 'Sukses');
+        lblStatus.Text = 'Status: ALL PROCESSES COMPLETED.';
+        uialert(fig, 'Processing and Figure Export Completed!', 'Success');
     end
     
     %% Function: Core Analysis Logic
@@ -246,12 +246,12 @@ function OCT_ForceXDeformation_Aligner()
         % ====================================================================
         % 2. INTERACTIVE COORDINATE PINPOINTING
         % ====================================================================
-        hFig = figure('Name', ['Sesi Anotasi Eksperimen: ', sampleName], 'Position', [100, 100, 1000, 700]);
+        hFig = figure('Name', ['Experiment Annotation Session: ', sampleName], 'Position', [100, 100, 1000, 700]);
         
         % --- A. OCT Displacements Mapping ---
         subplot(2, 1, 1);
         plot(time_oct_sec, displacement_mm_temp, 'r-', 'LineWidth', 1.5); grid on;
-        ylabel('Deformasi Raw (mm)'); hold on;
+        ylabel('Raw Deformation (mm)'); hold on;
         
         x_oct = zeros(n_pts, 1);
         h_oct_plots  = cell(1, n_pts);
@@ -259,20 +259,20 @@ function OCT_ForceXDeformation_Aligner()
         h_oct_guides = cell(1, n_pts);
         
         labels_oct = cell(1, n_pts);
-        labels_oct{1} = 'Mulai 1';
+        labels_oct{1} = 'Start Pull 1';
         for c = 1:N
-            labels_oct{2*c}   = sprintf('Puncak %d', c);
-            labels_oct{2*c+1} = sprintf('Akhir %d', c);
+            labels_oct{2*c}   = sprintf('Peak %d', c);
+            labels_oct{2*c+1} = sprintf('End %d', c);
         end
         
         k = 1;
         while k <= n_pts
             subplot(2, 1, 1);
             if k > 1
-                title({sprintf('KLIK DEFORMASI OCT (%d/%d)  |  [Tekan BACKSPACE untuk Undo]', k, n_pts), ...
+                title({sprintf('CLICK OCT DEFORMATION POINT (%d/%d)  |  [Press BACKSPACE to Undo]', k, n_pts), ...
                        ['Target: ', labels_oct{k}]});
             else
-                title({sprintf('KLIK DEFORMASI OCT (%d/%d)', k, n_pts), ['Target: ', labels_oct{k}]});
+                title({sprintf('CLICK OCT DEFORMATION POINT (%d/%d)', k, n_pts), ['Target: ', labels_oct{k}]});
             end
             
             [x_val, y_val, btn] = ginput(1);
@@ -312,7 +312,7 @@ function OCT_ForceXDeformation_Aligner()
         % --- B. Force Metrics Mapping ---
         subplot(2, 1, 2);
         plot(time_sensor_sec, force_sensor_gram, 'b-', 'LineWidth', 1.5); grid on;
-        xlabel('Waktu Data Sensor (s)'); ylabel('Gaya Sensor (g)'); hold on;
+        xlabel('Sensor Data Time (s)'); ylabel('Sensor Force (g)'); hold on;
         
         x_force = zeros(n_pts, 1);
         h_force_plots  = cell(1, n_pts);
@@ -320,20 +320,20 @@ function OCT_ForceXDeformation_Aligner()
         h_force_guides = cell(1, n_pts);
         
         labels_force = cell(1, n_pts);
-        labels_force{1} = 'Mulai Tarikan 1';
+        labels_force{1} = 'Start Pull 1';
         for c = 1:N
-            labels_force{2*c}   = sprintf('Puncak %d', c);
-            labels_force{2*c+1} = sprintf('Akhir %d', c);
+            labels_force{2*c}   = sprintf('Peak %d', c);
+            labels_force{2*c+1} = sprintf('End %d', c);
         end
         
         k = 1;
         while k <= n_pts
             subplot(2, 1, 2);
             if k > 1
-                title({sprintf('KLIK TITIK GAYA FORCE (%d/%d)  |  [Tekan BACKSPACE untuk Undo]', k, n_pts), ...
+                title({sprintf('CLICK FORCE SENSOR POINT (%d/%d)  |  [Press BACKSPACE to Undo]', k, n_pts), ...
                        ['Target: ', labels_force{k}]});
             else
-                title({sprintf('KLIK TITIK GAYA FORCE (%d/%d)', k, n_pts), ['Target: ', labels_force{k}]});
+                title({sprintf('CLICK FORCE SENSOR POINT (%d/%d)', k, n_pts), ['Target: ', labels_force{k}]});
             end
             
             [x_val, y_val, btn] = ginput(1);
