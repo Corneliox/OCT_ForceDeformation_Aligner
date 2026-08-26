@@ -314,111 +314,134 @@ function stiffnessOCT202606Original_Changethis()
         else
             bg = 'w'; fg = 'k'; grid_clr = [0.8 0.8 0.8];
         end
-        fmt_ax  = @(f, ax) [set(f, 'Color', bg), set(ax, 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr)];
-        fmt_lgd = @(lgd) set(lgd, 'TextColor', fg, 'Color', bg, 'EdgeColor', fg, 'FontSize', 7);
 
         % ---- Table 1: Deformation Normal ----
-        clf(f_exp, 'reset'); set(0, 'CurrentFigure', f_exp); hold on;
-        plot(time_secU, displacement_mm, 'r-', 'LineWidth', 1.5);
-        title(sprintf('Table 1: Deformation Normal (%s)', mode_str), 'Color', fg);
-        xlabel('Time (s)'); ylabel('Deformation (mm)'); grid on; hold off;
-        fmt_ax(f_exp, gca);
+        clf(f_exp, 'reset'); set(f_exp, 'Color', bg);
+        ax = axes('Parent', f_exp); hold(ax, 'on');
+        plot(ax, time_secU, displacement_mm, 'r-', 'LineWidth', 1.5);
+        title(ax, sprintf('Table 1: Deformation Normal (%s)', mode_str), 'Color', fg);
+        xlabel(ax, 'Time (s)'); ylabel(ax, 'Deformation (mm)'); grid(ax, 'on');
+        set(ax, 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr);
+        hold(ax, 'off');
         saveHighRes(f_exp, fullfile(outDir, sprintf('%s_Table1_Deformation_%s.png', sampleName, mode_str)), EXPORT_DPI);
 
         % ---- Table 2: Deformation -1 ----
-        clf(f_exp, 'reset'); set(0, 'CurrentFigure', f_exp); hold on;
-        plot(time_secU, displacement_mm_inv, 'r-', 'LineWidth', 1.5);
-        title(sprintf('Table 2: Deformation -1 (%s)', mode_str), 'Color', fg);
-        xlabel('Time (s)'); ylabel('Deformation x -1 (mm)'); grid on; hold off;
-        fmt_ax(f_exp, gca);
+        clf(f_exp, 'reset'); set(f_exp, 'Color', bg);
+        ax = axes('Parent', f_exp); hold(ax, 'on');
+        plot(ax, time_secU, displacement_mm_inv, 'r-', 'LineWidth', 1.5);
+        title(ax, sprintf('Table 2: Deformation -1 (%s)', mode_str), 'Color', fg);
+        xlabel(ax, 'Time (s)'); ylabel(ax, 'Deformation x -1 (mm)'); grid(ax, 'on');
+        set(ax, 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr);
+        hold(ax, 'off');
         saveHighRes(f_exp, fullfile(outDir, sprintf('%s_Table2_Deformation_Inv_%s.png', sampleName, mode_str)), EXPORT_DPI);
 
         % ---- Table 3: Force Vector ----
-        clf(f_exp, 'reset'); set(0, 'CurrentFigure', f_exp); hold on;
-        plot(time_secU, force_gram, 'b-', 'LineWidth', 1.5);
-        title(sprintf('Table 3: Force Vector (%s)', mode_str), 'Color', fg);
-        xlabel('Time (s)'); ylabel('Force (g)'); grid on; hold off;
-        fmt_ax(f_exp, gca);
+        clf(f_exp, 'reset'); set(f_exp, 'Color', bg);
+        ax = axes('Parent', f_exp); hold(ax, 'on');
+        plot(ax, time_secU, force_gram, 'b-', 'LineWidth', 1.5);
+        title(ax, sprintf('Table 3: Force Vector (%s)', mode_str), 'Color', fg);
+        xlabel(ax, 'Time (s)'); ylabel(ax, 'Force (g)'); grid(ax, 'on');
+        set(ax, 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr);
+        hold(ax, 'off');
         saveHighRes(f_exp, fullfile(outDir, sprintf('%s_Table3_Force_Vector_%s.png', sampleName, mode_str)), EXPORT_DPI);
 
         % ---- Table 4: Merged Dual Axis ----
-        clf(f_exp, 'reset'); set(0, 'CurrentFigure', f_exp); hold on;
-        yyaxis left;  plot(time_secU, displacement_mm_inv, 'r-', 'LineWidth', 1.5, 'DisplayName', 'Deformation -1');
-        ylabel('Deformation -1 (mm)');
-        yyaxis right; plot(time_secU, force_gram, 'b-', 'LineWidth', 1.5, 'DisplayName', 'Force');
-        ylabel('Force (g)');
-        gca.YAxis(1).Color = 'r'; gca.YAxis(2).Color = 'b';
-        title(sprintf('Table 4: Merged Plot (%s)', mode_str), 'Color', fg);
-        xlabel('Time (s)'); grid on; hold off;
-        fmt_ax(f_exp, gca); fmt_lgd(legend('Location', 'northwest'));
+        clf(f_exp, 'reset'); set(f_exp, 'Color', bg);
+        ax = axes('Parent', f_exp); hold(ax, 'on');
+        yyaxis(ax, 'left');  plot(ax, time_secU, displacement_mm_inv, 'r-', 'LineWidth', 1.5, 'DisplayName', 'Deformation -1');
+        ylabel(ax, 'Deformation -1 (mm)');
+        yyaxis(ax, 'right'); plot(ax, time_secU, force_gram, 'b-', 'LineWidth', 1.5, 'DisplayName', 'Force');
+        ylabel(ax, 'Force (g)');
+        ax.YAxis(1).Color = 'r'; ax.YAxis(2).Color = 'b';
+        title(ax, sprintf('Table 4: Merged Plot (%s)', mode_str), 'Color', fg);
+        xlabel(ax, 'Time (s)'); grid(ax, 'on');
+        set(ax, 'Color', bg, 'XColor', fg, 'GridColor', grid_clr);
+        lgd = legend(ax, 'Location', 'northwest');
+        set(lgd, 'TextColor', fg, 'Color', bg, 'EdgeColor', fg, 'FontSize', 7);
+        hold(ax, 'off');
         saveHighRes(f_exp, fullfile(outDir, sprintf('%s_Table4_Merged_Plot_%s.png', sampleName, mode_str)), EXPORT_DPI);
 
         % ---- Table 5: Hysteresis Evaluation ----
-        clf(f_exp, 'reset'); set(0, 'CurrentFigure', f_exp); hold on;
-        plot(displacement_mm, force_gram, '-', 'Color', fg, 'LineWidth', 1.5, 'DisplayName', 'Hysteresis Loop');
+        clf(f_exp, 'reset'); set(f_exp, 'Color', bg);
+        ax = axes('Parent', f_exp); hold(ax, 'on');
+        plot(ax, displacement_mm, force_gram, '-', 'Color', fg, 'LineWidth', 1.5, 'DisplayName', 'Hysteresis Loop');
         for i = 1:3
-            plot(w_targets(i), Pg_targets(i), colors{i}, 'MarkerFaceColor', colors{i}(1), 'MarkerSize', 6, 'HandleVisibility', 'off');
-            text(w_targets(i), Pg_targets(i), sprintf('  %s: %.2f kPa', labels{i}, E_results_kPa(i)), 'Color', fg, 'FontSize', 7, 'FontWeight', 'bold');
+            plot(ax, w_targets(i), Pg_targets(i), colors{i}, 'MarkerFaceColor', colors{i}(1), 'MarkerSize', 6, 'HandleVisibility', 'off');
+            text(ax, w_targets(i), Pg_targets(i), sprintf('  %s: %.2f kPa', labels{i}, E_results_kPa(i)), 'Color', fg, 'FontSize', 7, 'FontWeight', 'bold');
         end
-        title(sprintf('Table 5: Hysteresis Evaluation (%s)', mode_str), 'Color', fg);
-        xlabel('Deformation Normal (mm)'); ylabel('Force (g)'); grid on;
-        fmt_ax(f_exp, gca); fmt_lgd(legend('Location', 'northwest')); hold off;
+        title(ax, sprintf('Table 5: Hysteresis Evaluation (%s)', mode_str), 'Color', fg);
+        xlabel(ax, 'Deformation Normal (mm)'); ylabel(ax, 'Force (g)'); grid(ax, 'on');
+        set(ax, 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr);
+        lgd = legend(ax, 'Location', 'northwest');
+        set(lgd, 'TextColor', fg, 'Color', bg, 'EdgeColor', fg, 'FontSize', 7);
+        hold(ax, 'off');
         saveHighRes(f_exp, fullfile(outDir, sprintf('%s_Table5_Hysteresis_Evaluation_%s.png', sampleName, mode_str)), EXPORT_DPI);
 
         % ---- Table 7: Force vs Displacement Fit (Raw) ----
-        clf(f_exp, 'reset'); set(0, 'CurrentFigure', f_exp); hold on;
-        scatter(x_mm1_plot, y_g1, 20, [0.7 0.7 1], 'filled', 'DisplayName', 'Raw Loading Data');
-        scatter(x_mm2_plot, y_g2, 20, [1 0.7 0.7], 'filled', 'DisplayName', 'Raw Recovery Data');
-        plot(x_plot, fit_L, 'b-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Loading');
-        plot(x_plot, fit_R, 'r-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Recovery');
+        clf(f_exp, 'reset'); set(f_exp, 'Color', bg);
+        ax = axes('Parent', f_exp); hold(ax, 'on');
+        scatter(ax, x_mm1_plot, y_g1, 20, [0.7 0.7 1], 'filled', 'DisplayName', 'Raw Loading Data');
+        scatter(ax, x_mm2_plot, y_g2, 20, [1 0.7 0.7], 'filled', 'DisplayName', 'Raw Recovery Data');
+        plot(ax, x_plot, fit_L, 'b-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Loading');
+        plot(ax, x_plot, fit_R, 'r-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Recovery');
         for i = 1:3
-            plot(w_targets(i), Pg_targets(i), colors{i}, 'MarkerFaceColor', colors{i}(1), 'MarkerSize', 8, 'DisplayName', sprintf('Target %s', labels{i}));
-            text(w_targets(i), Pg_targets(i), sprintf('  %s: %.2f kPa', labels{i}, E_results_kPa(i)), 'Color', fg, 'FontWeight', 'bold');
+            plot(ax, w_targets(i), Pg_targets(i), colors{i}, 'MarkerFaceColor', colors{i}(1), 'MarkerSize', 8, 'DisplayName', sprintf('Target %s', labels{i}));
+            text(ax, w_targets(i), Pg_targets(i), sprintf('  %s: %.2f kPa', labels{i}, E_results_kPa(i)), 'Color', fg, 'FontWeight', 'bold');
         end
         text_str = {sprintf('E1 (1.5%%) : %.2f kPa', E_results_kPa(1)), ...
                     sprintf('E2 (3.3%%) : %.2f kPa', E_results_kPa(2)), ...
                     sprintf('E3 (5.0%%) : %.2f kPa', E_results_kPa(3))};
-        text(0.95, 0.05, text_str, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', ...
+        text(ax, 0.95, 0.05, text_str, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', ...
             'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold');
-        title(sprintf('Table 7: Force vs Displacement Fit (%s)', mode_str), 'Color', fg);
-        xlabel('Displacement (mm)'); ylabel('Force (g)'); grid on;
-        fmt_ax(f_exp, gca); fmt_lgd(legend('Location', 'northwest')); hold off;
+        title(ax, sprintf('Table 7: Force vs Displacement Fit (%s)', mode_str), 'Color', fg);
+        xlabel(ax, 'Displacement (mm)'); ylabel(ax, 'Force (g)'); grid(ax, 'on');
+        set(ax, 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr);
+        lgd = legend(ax, 'Location', 'northwest');
+        set(lgd, 'TextColor', fg, 'Color', bg, 'EdgeColor', fg, 'FontSize', 7);
+        hold(ax, 'off');
         saveHighRes(f_exp, fullfile(outDir, sprintf('%s_Table7_Stiffening_%s.png', sampleName, mode_str)), EXPORT_DPI);
 
         % ---- Table 8: Clean Curves ----
-        clf(f_exp, 'reset'); set(0, 'CurrentFigure', f_exp); hold on;
-        plot(x_plot, fit_L, 'b-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Loading');
-        plot(x_plot, fit_R, 'r-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Recovery');
+        clf(f_exp, 'reset'); set(f_exp, 'Color', bg);
+        ax = axes('Parent', f_exp); hold(ax, 'on');
+        plot(ax, x_plot, fit_L, 'b-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Loading');
+        plot(ax, x_plot, fit_R, 'r-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Recovery');
         for i = 1:3
-            plot(w_targets(i), Pg_targets(i), colors{i}, 'MarkerFaceColor', colors{i}(1), 'MarkerSize', 8, 'DisplayName', sprintf('Target %s', labels{i}));
-            text(w_targets(i), Pg_targets(i), sprintf('  %s: %.2f kPa', labels{i}, E_results_kPa(i)), 'Color', fg, 'FontWeight', 'bold');
+            plot(ax, w_targets(i), Pg_targets(i), colors{i}, 'MarkerFaceColor', colors{i}(1), 'MarkerSize', 8, 'DisplayName', sprintf('Target %s', labels{i}));
+            text(ax, w_targets(i), Pg_targets(i), sprintf('  %s: %.2f kPa', labels{i}, E_results_kPa(i)), 'Color', fg, 'FontWeight', 'bold');
         end
-        text(0.95, 0.05, text_str, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', ...
+        text(ax, 0.95, 0.05, text_str, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', ...
             'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold');
-        title(sprintf('Table 8: Clean Curves (%s)', mode_str), 'Color', fg);
-        xlabel('Displacement (mm)'); ylabel('Force (g)'); grid on;
-        fmt_ax(f_exp, gca); fmt_lgd(legend('Location', 'northwest')); hold off;
+        title(ax, sprintf('Table 8: Clean Curves (%s)', mode_str), 'Color', fg);
+        xlabel(ax, 'Displacement (mm)'); ylabel(ax, 'Force (g)'); grid(ax, 'on');
+        set(ax, 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr);
+        lgd = legend(ax, 'Location', 'northwest');
+        set(lgd, 'TextColor', fg, 'Color', bg, 'EdgeColor', fg, 'FontSize', 7);
+        hold(ax, 'off');
         saveHighRes(f_exp, fullfile(outDir, sprintf('%s_Table8_Clean_%s.png', sampleName, mode_str)), EXPORT_DPI);
 
         % ---- Table 14: Composite 3-Row Summary ----
-        clf(f_exp, 'reset'); set(0, 'CurrentFigure', f_exp);
-        set(f_exp, 'Position', [100, 100, 1100, 900], 'Color', bg);
+        clf(f_exp, 'reset'); set(f_exp, 'Position', [100, 100, 1100, 900], 'Color', bg);
 
-        ax14a = subplot(3, 2, [1, 2]);
-        scatter(time_secU, displacement_mm_inv, 8, 'r', 'o', 'MarkerFaceAlpha', 0.5, 'MarkerEdgeAlpha', 0.7, 'DisplayName', 'Deformation -1');
+        ax14a = subplot(3, 2, [1, 2], 'Parent', f_exp);
+        scatter(ax14a, time_secU, displacement_mm_inv, 8, 'r', 'o', 'MarkerFaceAlpha', 0.5, 'MarkerEdgeAlpha', 0.7, 'DisplayName', 'Deformation -1');
         xlabel(ax14a, 'Time (s)'); ylabel(ax14a, 'Deformation x -1 (mm)');
         title(ax14a, sprintf('Row 1 — Deformation -1 (%s)', mode_str), 'Color', fg);
-        grid(ax14a, 'on'); fmt_lgd(legend(ax14a, 'Location', 'northeast'));
+        grid(ax14a, 'on');
+        lgd14a = legend(ax14a, 'Location', 'northeast');
+        set(lgd14a, 'TextColor', fg, 'Color', bg, 'EdgeColor', fg, 'FontSize', 7);
         set(ax14a, 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr);
 
-        ax14b = subplot(3, 2, [3, 4]);
-        scatter(time_secU, force_gram, 8, 'b', 'o', 'MarkerFaceAlpha', 0.5, 'MarkerEdgeAlpha', 0.7, 'DisplayName', 'Force');
+        ax14b = subplot(3, 2, [3, 4], 'Parent', f_exp);
+        scatter(ax14b, time_secU, force_gram, 8, 'b', 'o', 'MarkerFaceAlpha', 0.5, 'MarkerEdgeAlpha', 0.7, 'DisplayName', 'Force');
         xlabel(ax14b, 'Time (s)'); ylabel(ax14b, 'Force (g)');
         title(ax14b, sprintf('Row 2 — Force (%s)', mode_str), 'Color', fg);
-        grid(ax14b, 'on'); fmt_lgd(legend(ax14b, 'Location', 'northeast'));
+        grid(ax14b, 'on');
+        lgd14b = legend(ax14b, 'Location', 'northeast');
+        set(lgd14b, 'TextColor', fg, 'Color', bg, 'EdgeColor', fg, 'FontSize', 7);
         set(ax14b, 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr);
 
-        ax14c = subplot(3, 2, 5);
+        ax14c = subplot(3, 2, 5, 'Parent', f_exp);
         hold(ax14c, 'on');
         yyaxis(ax14c, 'left');  plot(ax14c, time_secU, displacement_mm_inv, 'r-', 'LineWidth', 1.5, 'DisplayName', 'Deformation -1');
         ylabel(ax14c, 'Deformation -1 (mm)');
@@ -428,9 +451,11 @@ function stiffnessOCT202606Original_Changethis()
         xlabel(ax14c, 'Time (s)');
         title(ax14c, sprintf('Row 3A — Merged Plot (%s)', mode_str), 'Color', fg);
         grid(ax14c, 'on'); set(ax14c, 'Color', bg, 'XColor', fg, 'GridColor', grid_clr);
-        fmt_lgd(legend(ax14c, 'Location', 'northwest')); hold(ax14c, 'off');
+        lgd14c = legend(ax14c, 'Location', 'northwest');
+        set(lgd14c, 'TextColor', fg, 'Color', bg, 'EdgeColor', fg, 'FontSize', 7);
+        hold(ax14c, 'off');
 
-        ax14d = subplot(3, 2, 6);
+        ax14d = subplot(3, 2, 6, 'Parent', f_exp);
         hold(ax14d, 'on');
         plot(ax14d, displacement_mm, force_gram, '-', 'Color', fg, 'LineWidth', 1.5, 'DisplayName', 'Hysteresis Loop');
         for i = 1:3
@@ -440,7 +465,9 @@ function stiffnessOCT202606Original_Changethis()
         xlabel(ax14d, 'Deformation Normal (mm)'); ylabel(ax14d, 'Force (g)');
         title(ax14d, sprintf('Row 3B — Table 5: Hysteresis (%s)', mode_str), 'Color', fg);
         grid(ax14d, 'on'); set(ax14d, 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr);
-        fmt_lgd(legend(ax14d, 'Location', 'northwest', 'FontSize', 6)); hold(ax14d, 'off');
+        lgd14d = legend(ax14d, 'Location', 'northwest', 'FontSize', 6);
+        set(lgd14d, 'TextColor', fg, 'Color', bg, 'EdgeColor', fg, 'FontSize', 7);
+        hold(ax14d, 'off');
 
         sgtitle(sprintf('Table 14: Composite Summary — %s — %s', sampleName, mode_str), ...
             'Color', fg, 'FontWeight', 'bold', 'FontSize', 14);
