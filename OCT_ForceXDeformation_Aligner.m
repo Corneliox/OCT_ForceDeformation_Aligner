@@ -1,4 +1,4 @@
-function OCT_ForceXDeformation_Aligner()
+m function OCT_ForceXDeformation_Aligner()
     % ============================================================
     % CONFIGURATION — Defaults: 3 Waves, Mode 0: Raw, DPI: 300 (High Res)
     % ============================================================
@@ -427,6 +427,12 @@ function OCT_ForceXDeformation_Aligner()
         % ====================================================================
         v_poisson = 0.45; a_radius = 2.5; k_factor = 3.085; g_gravity = 9.81;
         part1 = (1 - v_poisson^2) / (2 * a_radius * k_factor);
+        t0_mm = abs(e_um(idx_titik(1))) / 1000;
+        
+        w_target_A = (1.5/100) * t0_mm;
+        w_target_B = (3.3/100) * t0_mm;
+        w_target_C = (5.0/100) * t0_mm;
+        
         % Cell arrays for all per-cycle quantities
         disp_l = cell(1,N); force_l = cell(1,N);
         disp_r = cell(1,N); force_r = cell(1,N);
@@ -435,7 +441,6 @@ function OCT_ForceXDeformation_Aligner()
         a_R = cell(1,N);  b_R = cell(1,N);
         x_plot_c = cell(1,N); fit_L_c = cell(1,N); fit_R_c = cell(1,N);
         x_max_c  = cell(1,N);
-        w_target_A = cell(1,N); w_target_B = cell(1,N); w_target_C = cell(1,N);
         Pg_A = cell(1,N); Pg_B = cell(1,N); Pg_C = cell(1,N);
         E_A_kPa = cell(1,N); E_B_kPa = cell(1,N); E_C_kPa = cell(1,N);
         target_A = cell(1,N); target_B = cell(1,N); target_C = cell(1,N);
@@ -454,32 +459,27 @@ function OCT_ForceXDeformation_Aligner()
             disp_s{c} = displacement_mm_normal(i_start:i_end);
             force_s{c} = force_interp_oct(i_start:i_end);
             
+            target_A{c} = min(disp_l{c}) + w_target_A;
+            target_B{c} = min(disp_l{c}) + w_target_B;
+            target_C{c} = min(disp_l{c}) + w_target_C;
+            
             [a_L{c}, b_L{c}, a_R{c}, b_R{c}, x_plot_c{c}, fit_L_c{c}, fit_R_c{c}, x_max_c{c}] = ...
                 fit_power_law(disp_l{c}, force_l{c}, disp_r{c}, force_r{c});
             
-            % Pilihan A: 20%, 50%, 85% of peak displacement per cycle
-            w_target_A{c} = 0.20 * x_max_c{c};
-            w_target_B{c} = 0.50 * x_max_c{c};
-            w_target_C{c} = 0.85 * x_max_c{c};
+            Pg_A{c} = a_L{c} * (w_target_A ^ b_L{c});
+            Pg_B{c} = a_L{c} * (w_target_B ^ b_L{c});
+            Pg_C{c} = a_L{c} * (w_target_C ^ b_L{c});
             
-            target_A{c} = min(disp_l{c}) + w_target_A{c};
-            target_B{c} = min(disp_l{c}) + w_target_B{c};
-            target_C{c} = min(disp_l{c}) + w_target_C{c};
-            
-            Pg_A{c} = a_L{c} * (w_target_A{c} ^ b_L{c});
-            Pg_B{c} = a_L{c} * (w_target_B{c} ^ b_L{c});
-            Pg_C{c} = a_L{c} * (w_target_C{c} ^ b_L{c});
-            
-            sl_A = a_L{c} * b_L{c} * (w_target_A{c} ^ (b_L{c}-1));
-            sl_B = a_L{c} * b_L{c} * (w_target_B{c} ^ (b_L{c}-1));
-            sl_C = a_L{c} * b_L{c} * (w_target_C{c} ^ (b_L{c}-1));
+            sl_A = a_L{c} * b_L{c} * (w_target_A ^ (b_L{c}-1));
+            sl_B = a_L{c} * b_L{c} * (w_target_B ^ (b_L{c}-1));
+            sl_C = a_L{c} * b_L{c} * (w_target_C ^ (b_L{c}-1));
             E_A_kPa{c} = part1 * ((max(0, sl_A) / 1000) * g_gravity) * 1000;
             E_B_kPa{c} = part1 * ((max(0, sl_B) / 1000) * g_gravity) * 1000;
             E_C_kPa{c} = part1 * ((max(0, sl_C) / 1000) * g_gravity) * 1000;
             
-            text_str_c{c} = {sprintf('E1 (20%%) : %.2f kPa', E_A_kPa{c}), ...
-                             sprintf('E2 (50%%) : %.2f kPa', E_B_kPa{c}), ...
-                             sprintf('E3 (85%%) : %.2f kPa', E_C_kPa{c})};
+            text_str_c{c} = {sprintf('E1 (1.5%%) : %.2f kPa', E_A_kPa{c}), ...
+                             sprintf('E2 (3.3%%) : %.2f kPa', E_B_kPa{c}), ...
+                             sprintf('E3 (5.0%%) : %.2f kPa', E_C_kPa{c})};
             
             disp_l_sh{c} = disp_l{c} - min(disp_l{c});
             disp_r_sh{c} = disp_r{c} - min(disp_l{c});
@@ -493,24 +493,24 @@ function OCT_ForceXDeformation_Aligner()
         fit_L_avg = a_L_avg * (x_plot_avg .^ b_L_avg);
         fit_R_avg = a_R_avg * (x_plot_avg .^ b_R_avg);
         
-        w_target_avg_A = 0.20 * x_max_avg;
-        w_target_avg_B = 0.50 * x_max_avg;
-        w_target_avg_C = 0.85 * x_max_avg;
+        w_target_avg_A = w_target_A;
+        w_target_avg_B = w_target_B;
+        w_target_avg_C = w_target_C;
         
-        Pg_avg_A = a_L_avg * (w_target_avg_A ^ b_L_avg);
-        Pg_avg_B = a_L_avg * (w_target_avg_B ^ b_L_avg);
-        Pg_avg_C = a_L_avg * (w_target_avg_C ^ b_L_avg);
+        Pg_avg_A = a_L_avg * (w_target_A ^ b_L_avg);
+        Pg_avg_B = a_L_avg * (w_target_B ^ b_L_avg);
+        Pg_avg_C = a_L_avg * (w_target_C ^ b_L_avg);
         
-        sl_avg_A = a_L_avg * b_L_avg * (w_target_avg_A ^ (b_L_avg-1));
-        sl_avg_B = a_L_avg * b_L_avg * (w_target_avg_B ^ (b_L_avg-1));
-        sl_avg_C = a_L_avg * b_L_avg * (w_target_avg_C ^ (b_L_avg-1));
+        sl_avg_A = a_L_avg * b_L_avg * (w_target_A ^ (b_L_avg-1));
+        sl_avg_B = a_L_avg * b_L_avg * (w_target_B ^ (b_L_avg-1));
+        sl_avg_C = a_L_avg * b_L_avg * (w_target_C ^ (b_L_avg-1));
         E_avg_A_kPa = part1 * ((max(0, sl_avg_A) / 1000) * g_gravity) * 1000;
         E_avg_B_kPa = part1 * ((max(0, sl_avg_B) / 1000) * g_gravity) * 1000;
         E_avg_C_kPa = part1 * ((max(0, sl_avg_C) / 1000) * g_gravity) * 1000;
         
-        text_str_avg = {sprintf('E1 (20%%) : %.2f kPa', E_avg_A_kPa), ...
-                        sprintf('E2 (50%%) : %.2f kPa', E_avg_B_kPa), ...
-                        sprintf('E3 (85%%) : %.2f kPa', E_avg_C_kPa)};
+        text_str_avg = {sprintf('E1 (1.5%%) : %.2f kPa', E_avg_A_kPa), ...
+                        sprintf('E2 (3.3%%) : %.2f kPa', E_avg_B_kPa), ...
+                        sprintf('E3 (5.0%%) : %.2f kPa', E_avg_C_kPa)};
         
         % Table 5 targets (use cycle-B values for hysteresis markers)
         E_kPa_B = cellfun(@(x) x, E_B_kPa);
@@ -586,9 +586,9 @@ function OCT_ForceXDeformation_Aligner()
             scatter(ax_cycle{c}, disp_r_sh{c}, force_r{c}, 10, [1 0.7 0.7], 'filled', 'DisplayName', 'Raw Recovery');
             plot(ax_cycle{c}, x_plot_c{c}, fit_L_c{c}, 'b-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Loading');
             plot(ax_cycle{c}, x_plot_c{c}, fit_R_c{c}, 'r-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Recovery');
-            plot(ax_cycle{c}, w_target_A{c}, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 6, 'DisplayName', 'Target E1 (20%)'); text(ax_cycle{c}, w_target_A{c}, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', 'k', 'FontSize', 8, 'FontWeight', 'bold');
-            plot(ax_cycle{c}, w_target_B{c}, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 6, 'DisplayName', 'Target E2 (50%)'); text(ax_cycle{c}, w_target_B{c}, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', 'k', 'FontSize', 8, 'FontWeight', 'bold');
-            plot(ax_cycle{c}, w_target_C{c}, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 6, 'DisplayName', 'Target E3 (85%)'); text(ax_cycle{c}, w_target_C{c}, Pg_C{c}, sprintf(' E3:%.2f kPa', E_C_kPa{c}), 'Color', 'k', 'FontSize', 8, 'FontWeight', 'bold');
+            plot(ax_cycle{c}, w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 6, 'DisplayName', 'Target E1 (1.5%)'); text(ax_cycle{c}, w_target_A, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', 'k', 'FontSize', 8, 'FontWeight', 'bold');
+            plot(ax_cycle{c}, w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 6, 'DisplayName', 'Target E2 (3.3%)'); text(ax_cycle{c}, w_target_B, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', 'k', 'FontSize', 8, 'FontWeight', 'bold');
+            plot(ax_cycle{c}, w_target_C, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 6, 'DisplayName', 'Target E3 (5.0%)'); text(ax_cycle{c}, w_target_C, Pg_C{c}, sprintf(' E3:%.2f kPa', E_C_kPa{c}), 'Color', 'k', 'FontSize', 8, 'FontWeight', 'bold');
             text(ax_cycle{c}, 0.95, 0.05, text_str_c{c}, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', 'BackgroundColor', 'w', 'EdgeColor', 'k', 'FontWeight', 'bold');
             xlabel(ax_cycle{c}, 'Displacement (mm)'); ylabel(ax_cycle{c}, 'Force (g)'); grid(ax_cycle{c}, 'on'); hold(ax_cycle{c}, 'off');
         end
@@ -701,9 +701,9 @@ function OCT_ForceXDeformation_Aligner()
                 scatter(disp_r_sh{c}, force_r{c}, 20, [1 0.7 0.7], 'filled', 'DisplayName', 'Raw Recovery Data');
                 plot(x_plot_c{c}, fit_L_c{c}, 'b-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Loading');
                 plot(x_plot_c{c}, fit_R_c{c}, 'r-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Recovery');
-                plot(w_target_A{c}, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (20%)'); text(w_target_A{c}, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
-                plot(w_target_B{c}, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (50%)'); text(w_target_B{c}, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
-                plot(w_target_C{c}, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3 (85%)'); text(w_target_C{c}, Pg_C{c}, sprintf(' E3:%.2f kPa', E_C_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
+                plot(w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (1.5%)'); text(w_target_A, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
+                plot(w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (3.3%)'); text(w_target_B, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
+                plot(w_target_C, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3 (5.0%)'); text(w_target_C, Pg_C{c}, sprintf(' E3:%.2f kPa', E_C_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
                 text(0.95, 0.05, text_str_c{c}, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', 'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold');
                 xlabel('Displacement (mm)'); ylabel('Force (g)');
                 title(sprintf('Table %d: Cycle %d Force vs Displacement (%s)', tbl_raw, c, mode_str), 'Color', fg); grid on;
@@ -717,9 +717,9 @@ function OCT_ForceXDeformation_Aligner()
                 clf(f_export, 'reset'); set(0, 'CurrentFigure', f_export); hold on;
                 plot(x_plot_c{c}, fit_L_c{c}, 'b-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Loading');
                 plot(x_plot_c{c}, fit_R_c{c}, 'r-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Recovery');
-                plot(w_target_A{c}, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (20%)'); text(w_target_A{c}, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
-                plot(w_target_B{c}, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (50%)'); text(w_target_B{c}, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
-                plot(w_target_C{c}, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3 (85%)'); text(w_target_C{c}, Pg_C{c}, sprintf(' E3:%.2f kPa', E_C_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
+                plot(w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (1.5%)'); text(w_target_A, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
+                plot(w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (3.3%)'); text(w_target_B, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
+                plot(w_target_C, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3 (5.0%)'); text(w_target_C, Pg_C{c}, sprintf(' E3:%.2f kPa', E_C_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
                 text(0.95, 0.05, text_str_c{c}, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', 'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold');
                 xlabel('Displacement (mm)'); ylabel('Force (g)');
                 title(sprintf('Table %d: Cycle %d Clean Curves (%s)', tbl_clean, c, mode_str), 'Color', fg); grid on;
@@ -732,9 +732,9 @@ function OCT_ForceXDeformation_Aligner()
             clf(f_export, 'reset'); set(0, 'CurrentFigure', f_export); hold on;
             plot(x_plot_avg, fit_L_avg, 'b-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Loading (Average)');
             plot(x_plot_avg, fit_R_avg, 'r-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Recovery (Average)');
-            plot(w_target_avg_A, Pg_avg_A, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (20%)'); text(w_target_avg_A, Pg_avg_A, sprintf(' E1:%.2f kPa', E_avg_A_kPa), 'Color', fg, 'FontWeight', 'bold');
-            plot(w_target_avg_B, Pg_avg_B, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (50%)'); text(w_target_avg_B, Pg_avg_B, sprintf(' E2:%.2f kPa', E_avg_B_kPa), 'Color', fg, 'FontWeight', 'bold');
-            plot(w_target_avg_C, Pg_avg_C, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3 (85%)'); text(w_target_avg_C, Pg_avg_C, sprintf(' E3:%.2f kPa', E_avg_C_kPa), 'Color', fg, 'FontWeight', 'bold');
+            plot(w_target_A, Pg_avg_A, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (1.5%)'); text(w_target_A, Pg_avg_A, sprintf(' E1:%.2f kPa', E_avg_A_kPa), 'Color', fg, 'FontWeight', 'bold');
+            plot(w_target_B, Pg_avg_B, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (3.3%)'); text(w_target_B, Pg_avg_B, sprintf(' E2:%.2f kPa', E_avg_B_kPa), 'Color', fg, 'FontWeight', 'bold');
+            plot(w_target_C, Pg_avg_C, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3 (5.0%)'); text(w_target_C, Pg_avg_C, sprintf(' E3:%.2f kPa', E_avg_C_kPa), 'Color', fg, 'FontWeight', 'bold');
             text(0.95, 0.05, text_str_avg, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', 'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold');
             xlabel('Displacement (mm)'); ylabel('Force (g)');
             title(sprintf('Table %d: Average of %d Cycles (%s)', tbl_avg, N, mode_str), 'Color', fg); grid on;
@@ -828,7 +828,7 @@ function OCT_ForceXDeformation_Aligner()
             for s = 1:3
                 cyc_col{end+1} = sprintf('Cycle %d', c); %#ok<AGROW>
             end
-            strain_col = [strain_col; {'E1_20%'; 'E2_50%'; 'E3_85%'}]; %#ok<AGROW>
+            strain_col = [strain_col; {'E1_1.5%'; 'E2_3.3%'; 'E3_5.0%'}]; %#ok<AGROW>
             E_col  = [E_col;  E_A_kPa{c}; E_B_kPa{c}; E_C_kPa{c}]; %#ok<AGROW>
             tgt_col = [tgt_col; target_A{c}; target_B{c}; target_C{c}]; %#ok<AGROW>
             pg_col  = [pg_col;  Pg_A{c}; Pg_B{c}; Pg_C{c}]; %#ok<AGROW>
@@ -943,9 +943,9 @@ function OCT_ForceXDeformation_Aligner()
                 scatter(disp_r_sh{c}, force_r{c}, 20, [1 0.7 0.7], 'filled', 'DisplayName', 'Raw Recovery Data');
                 plot(x_plot_c{c}, fit_L_c{c}, 'b-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Loading');
                 plot(x_plot_c{c}, fit_R_c{c}, 'r-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Recovery');
-                plot(w_target_A{c}, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (20%)'); text(w_target_A{c}, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
-                plot(w_target_B{c}, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (50%)'); text(w_target_B{c}, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
-                plot(w_target_C{c}, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3 (85%)'); text(w_target_C{c}, Pg_C{c}, sprintf(' E3:%.2f kPa', E_C_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
+                plot(w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (1.5%)'); text(w_target_A, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
+                plot(w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (3.3%)'); text(w_target_B, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
+                plot(w_target_C, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3 (5.0%)'); text(w_target_C, Pg_C{c}, sprintf(' E3:%.2f kPa', E_C_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
                 text(0.95, 0.05, text_str_c{c}, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', 'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold');
                 xlabel('Displacement (mm)'); ylabel('Force (g)');
                 title(sprintf('Table 7: Cycle %d Force vs Displacement (%s)', c, mode_str), 'Color', fg); grid on;
@@ -956,9 +956,9 @@ function OCT_ForceXDeformation_Aligner()
                 clf(f_export_c, 'reset'); set(0, 'CurrentFigure', f_export_c); hold on;
                 plot(x_plot_c{c}, fit_L_c{c}, 'b-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Loading');
                 plot(x_plot_c{c}, fit_R_c{c}, 'r-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Recovery');
-                plot(w_target_A{c}, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (20%)'); text(w_target_A{c}, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
-                plot(w_target_B{c}, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (50%)'); text(w_target_B{c}, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
-                plot(w_target_C{c}, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3 (85%)'); text(w_target_C{c}, Pg_C{c}, sprintf(' E3:%.2f kPa', E_C_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
+                plot(w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (1.5%)'); text(w_target_A, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
+                plot(w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (3.3%)'); text(w_target_B, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
+                plot(w_target_C, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3 (5.0%)'); text(w_target_C, Pg_C{c}, sprintf(' E3:%.2f kPa', E_C_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
                 text(0.95, 0.05, text_str_c{c}, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', 'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold');
                 xlabel('Displacement (mm)'); ylabel('Force (g)');
                 title(sprintf('Table 8: Cycle %d Clean Curves (%s)', c, mode_str), 'Color', fg); grid on;
@@ -1026,7 +1026,7 @@ function OCT_ForceXDeformation_Aligner()
                 'VariableNames', {'Evaluation_Regime', 'Stiffness_Value_kPa', 'Evaluation_Strain_Target_mm', 'Extracted_Force_Value_g'});
             t6_sheet_c = table(theta_c(:), X_disp_c(:), Y_disp_c(:), 'VariableNames', {'Theta_Radians', 'Cartesian_X', 'Cartesian_Y'});
             t7_sheet_c = table({sprintf('Cycle %d', c); sprintf('Cycle %d', c); sprintf('Cycle %d', c)}, ...
-                {'E1_20%'; 'E2_50%'; 'E3_85%'}, ...
+                {'E1_1.5%'; 'E2_3.3%'; 'E3_5.0%'}, ...
                 [E_A_kPa{c}; E_B_kPa{c}; E_C_kPa{c}], ...
                 [target_A{c}; target_B{c}; target_C{c}], ...
                 [Pg_A{c}; Pg_B{c}; Pg_C{c}], ...
