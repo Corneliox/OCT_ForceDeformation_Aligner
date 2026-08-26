@@ -231,7 +231,7 @@ function stiffnessOCT202606Changethis()
         
         data_sensor = readtable(forceFile);
         time_sensor_ms = data_sensor{:, 1};
-        force_sensor_gram = data_sensor{:, 2}; 
+        force_sensor_gram = data_sensor{:, 2} / 10; 
         force_sensor_gram = force_sensor_gram - min(force_sensor_gram); 
         
         pixel_to_um = 1000 / 200; 
