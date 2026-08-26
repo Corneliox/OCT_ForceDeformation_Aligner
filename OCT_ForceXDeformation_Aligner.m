@@ -589,7 +589,6 @@ m function OCT_ForceXDeformation_Aligner()
             plot(ax_cycle{c}, w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 6, 'DisplayName', 'Target E1 (1.67%)'); text(ax_cycle{c}, w_target_A, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', 'k', 'FontSize', 8, 'FontWeight', 'bold');
             plot(ax_cycle{c}, w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 6, 'DisplayName', 'Target E2 (3.34%)'); text(ax_cycle{c}, w_target_B, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', 'k', 'FontSize', 8, 'FontWeight', 'bold');
             plot(ax_cycle{c}, w_target_C, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 6, 'DisplayName', 'Target E3 (5.0%)'); text(ax_cycle{c}, w_target_C, Pg_C{c}, sprintf(' E3:%.2f kPa', E_C_kPa{c}), 'Color', 'k', 'FontSize', 8, 'FontWeight', 'bold');
-            text(ax_cycle{c}, 0.95, 0.05, text_str_c{c}, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', 'BackgroundColor', 'w', 'EdgeColor', 'k', 'FontWeight', 'bold');
             xlabel(ax_cycle{c}, 'Displacement (mm)'); ylabel(ax_cycle{c}, 'Force (g)'); grid(ax_cycle{c}, 'on'); hold(ax_cycle{c}, 'off');
         end
           % ====================================================================
@@ -704,7 +703,6 @@ m function OCT_ForceXDeformation_Aligner()
                 plot(w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (1.67%)'); text(w_target_A, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
                 plot(w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (3.34%)'); text(w_target_B, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
                 plot(w_target_C, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3 (5.0%)'); text(w_target_C, Pg_C{c}, sprintf(' E3:%.2f kPa', E_C_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
-                text(0.95, 0.05, text_str_c{c}, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', 'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold');
                 xlabel('Displacement (mm)'); ylabel('Force (g)');
                 title(sprintf('Table %d: Cycle %d Force vs Displacement (%s)', tbl_raw, c, mode_str), 'Color', fg); grid on;
                 fmt_ax(f_export, gca); fmt_lgd(legend('Location', 'northwest')); hold off;
@@ -720,7 +718,6 @@ m function OCT_ForceXDeformation_Aligner()
                 plot(w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (1.67%)'); text(w_target_A, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
                 plot(w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (3.34%)'); text(w_target_B, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
                 plot(w_target_C, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3 (5.0%)'); text(w_target_C, Pg_C{c}, sprintf(' E3:%.2f kPa', E_C_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
-                text(0.95, 0.05, text_str_c{c}, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', 'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold');
                 xlabel('Displacement (mm)'); ylabel('Force (g)');
                 title(sprintf('Table %d: Cycle %d Clean Curves (%s)', tbl_clean, c, mode_str), 'Color', fg); grid on;
                 fmt_ax(f_export, gca); fmt_lgd(legend('Location', 'northwest')); hold off;
@@ -735,7 +732,6 @@ m function OCT_ForceXDeformation_Aligner()
             plot(w_target_A, Pg_avg_A, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (1.67%)'); text(w_target_A, Pg_avg_A, sprintf(' E1:%.2f kPa', E_avg_A_kPa), 'Color', fg, 'FontWeight', 'bold');
             plot(w_target_B, Pg_avg_B, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (3.34%)'); text(w_target_B, Pg_avg_B, sprintf(' E2:%.2f kPa', E_avg_B_kPa), 'Color', fg, 'FontWeight', 'bold');
             plot(w_target_C, Pg_avg_C, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3 (5.0%)'); text(w_target_C, Pg_avg_C, sprintf(' E3:%.2f kPa', E_avg_C_kPa), 'Color', fg, 'FontWeight', 'bold');
-            text(0.95, 0.05, text_str_avg, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', 'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold');
             xlabel('Displacement (mm)'); ylabel('Force (g)');
             title(sprintf('Table %d: Average of %d Cycles (%s)', tbl_avg, N, mode_str), 'Color', fg); grid on;
             fmt_ax(f_export, gca); fmt_lgd(legend('Location', 'northwest')); hold off;
@@ -993,7 +989,6 @@ m function OCT_ForceXDeformation_Aligner()
                 plot(w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (1.67%)'); text(w_target_A, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
                 plot(w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (3.34%)'); text(w_target_B, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
                 plot(w_target_C, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3 (5.0%)'); text(w_target_C, Pg_C{c}, sprintf(' E3:%.2f kPa', E_C_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
-                text(0.95, 0.05, text_str_c{c}, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', 'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold');
                 xlabel('Displacement (mm)'); ylabel('Force (g)');
                 title(sprintf('Table 7: Cycle %d Force vs Displacement (%s)', c, mode_str), 'Color', fg); grid on;
                 fmt_ax(f_export_c, gca); fmt_lgd(legend('Location', 'northwest')); hold off;
@@ -1006,7 +1001,6 @@ m function OCT_ForceXDeformation_Aligner()
                 plot(w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (1.67%)'); text(w_target_A, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
                 plot(w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (3.34%)'); text(w_target_B, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
                 plot(w_target_C, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3 (5.0%)'); text(w_target_C, Pg_C{c}, sprintf(' E3:%.2f kPa', E_C_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
-                text(0.95, 0.05, text_str_c{c}, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', 'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold');
                 xlabel('Displacement (mm)'); ylabel('Force (g)');
                 title(sprintf('Table 8: Cycle %d Clean Curves (%s)', c, mode_str), 'Color', fg); grid on;
                 fmt_ax(f_export_c, gca); fmt_lgd(legend('Location', 'northwest')); hold off;

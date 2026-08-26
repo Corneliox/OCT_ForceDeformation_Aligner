@@ -388,11 +388,6 @@ function stiffnessOCT202606Original_Changethis()
             plot(ax, w_targets(i), Pg_targets(i), colors{i}, 'MarkerFaceColor', colors{i}(1), 'MarkerSize', 8, 'DisplayName', sprintf('Target %s', labels{i}));
             text(ax, w_targets(i), Pg_targets(i), sprintf('  %s: %.2f kPa', labels{i}, E_results_kPa(i)), 'Color', fg, 'FontWeight', 'bold');
         end
-        text_str = {sprintf('E1 (1.67%%) : %.2f kPa', E_results_kPa(1)), ...
-                    sprintf('E2 (3.34%%) : %.2f kPa', E_results_kPa(2)), ...
-                    sprintf('E3 (5.0%%) : %.2f kPa', E_results_kPa(3))};
-        text(ax, 0.95, 0.05, text_str, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', ...
-            'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold');
         title(ax, sprintf('Table 7: Force vs Displacement Fit (%s)', mode_str), 'Color', fg);
         xlabel(ax, 'Displacement (mm)'); ylabel(ax, 'Force (g)'); grid(ax, 'on');
         set(ax, 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr);
@@ -410,8 +405,6 @@ function stiffnessOCT202606Original_Changethis()
             plot(ax, w_targets(i), Pg_targets(i), colors{i}, 'MarkerFaceColor', colors{i}(1), 'MarkerSize', 8, 'DisplayName', sprintf('Target %s', labels{i}));
             text(ax, w_targets(i), Pg_targets(i), sprintf('  %s: %.2f kPa', labels{i}, E_results_kPa(i)), 'Color', fg, 'FontWeight', 'bold');
         end
-        text(ax, 0.95, 0.05, text_str, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', ...
-            'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold');
         title(ax, sprintf('Table 8: Clean Curves (%s)', mode_str), 'Color', fg);
         xlabel(ax, 'Displacement (mm)'); ylabel(ax, 'Force (g)'); grid(ax, 'on');
         set(ax, 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr);
