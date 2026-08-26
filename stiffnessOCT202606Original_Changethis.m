@@ -282,9 +282,9 @@ function stiffnessOCT202606Original_Changethis()
     part1 = (1 - v_poisson^2) / (2 * a_radius * k_factor);
 
     t0_mm = thickness_um1(1) / 1000;
-    strain_targets = [0.015, 0.033, 0.050]; % 1.5%, 3.3%, 5.0%
+    strain_targets = [0.0167, 0.0334, 0.0500]; % 1.67%, 3.34%, 5.0%
     w_targets = strain_targets * t0_mm;
-    labels = {'E1 (1.5%)', 'E2 (3.3%)', 'E3 (5.0%)'};
+    labels = {'E1 (1.67%)', 'E2 (3.34%)', 'E3 (5.0%)'};
     colors = {'rs', 'bs', 'ms'};
 
     Pg_targets = zeros(1, 3);
@@ -388,8 +388,8 @@ function stiffnessOCT202606Original_Changethis()
             plot(ax, w_targets(i), Pg_targets(i), colors{i}, 'MarkerFaceColor', colors{i}(1), 'MarkerSize', 8, 'DisplayName', sprintf('Target %s', labels{i}));
             text(ax, w_targets(i), Pg_targets(i), sprintf('  %s: %.2f kPa', labels{i}, E_results_kPa(i)), 'Color', fg, 'FontWeight', 'bold');
         end
-        text_str = {sprintf('E1 (1.5%%) : %.2f kPa', E_results_kPa(1)), ...
-                    sprintf('E2 (3.3%%) : %.2f kPa', E_results_kPa(2)), ...
+        text_str = {sprintf('E1 (1.67%%) : %.2f kPa', E_results_kPa(1)), ...
+                    sprintf('E2 (3.34%%) : %.2f kPa', E_results_kPa(2)), ...
                     sprintf('E3 (5.0%%) : %.2f kPa', E_results_kPa(3))};
         text(ax, 0.95, 0.05, text_str, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', ...
             'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold');
@@ -486,7 +486,7 @@ function stiffnessOCT202606Original_Changethis()
         'VariableNames', {'Evaluation_Regime', 'Stiffness_Value_kPa', 'Evaluation_Strain_Target_mm', 'Extracted_Force_Value_g'});
     
     t7_sheet = table({'Single Cycle'; 'Single Cycle'; 'Single Cycle'}, ...
-        {'E1_1.5%'; 'E2_3.3%'; 'E3_5.0%'}, ...
+        {'E1_1.67%'; 'E2_3.34%'; 'E3_5.0%'}, ...
         E_results_kPa(:), ...
         w_targets(:), ...
         Pg_targets(:), ...
@@ -504,10 +504,63 @@ function stiffnessOCT202606Original_Changethis()
         warning('Failed to save Excel workbook: %s', ME.message);
     end
 
+    %% 9. OCT M-Mode Caliper Measurements Figure & Export
+    f_cal = figure('Name', sprintf('OCT M-Mode Caliper Measurements — %s', sampleName), ...
+        'Position', [120, 120, 980, 620], 'Color', 'k');
+    ax_cal = axes('Parent', f_cal);
+    set(ax_cal, 'Color', [0.1 0.1 0.1], 'XColor', 'w', 'YColor', 'w', 'GridColor', [0.3 0.3 0.3]);
+    hold(ax_cal, 'on');
+
+    frames_x = 1:size(data, 1);
+    top_sc = abs(data{:, 5});
+    if size(data, 2) >= 6, bot_sc = abs(data{:, 6}); else, bot_sc = top_sc; end
+    if size(data, 2) >= 7, end_ed = abs(data{:, 7}); else, end_ed = top_sc + (thickness_initial/pixel_to_um); end
+
+    plot(ax_cal, frames_x, top_sc, 'r-', 'LineWidth', 2.0, 'DisplayName', 'top SC');
+    if any(bot_sc ~= top_sc)
+        plot(ax_cal, frames_x, bot_sc, 'y-', 'LineWidth', 2.0, 'DisplayName', 'bot SC');
+    end
+    plot(ax_cal, frames_x, end_ed, 'g-', 'LineWidth', 2.0, 'DisplayName', 'end ED');
+    set(ax_cal, 'YDir', 'reverse'); % Invert Y axis for depth
+
+    % Caliper measurement points
+    cal_pts = [idx_kanan_max, idx_min_global, idx_max_global];
+    cap_w = max(3, round(length(frames_x) * 0.01));
+
+    for p_idx = 1:length(cal_pts)
+        kp = cal_pts(p_idx);
+        y_t = top_sc(kp);
+        y_b = end_ed(kp);
+        th_px = abs(y_b - y_t);
+        th_mm = th_px * pixel_to_um / 1000;
+
+        % Vertical caliper line
+        plot(ax_cal, [kp, kp], [y_t, y_b], 'w-', 'LineWidth', 2.0, 'HandleVisibility', 'off');
+        % Horizontal end caps
+        plot(ax_cal, [kp - cap_w, kp + cap_w], [y_t, y_t], 'w-', 'LineWidth', 2.5, 'HandleVisibility', 'off');
+        plot(ax_cal, [kp - cap_w, kp + cap_w], [y_b, y_b], 'w-', 'LineWidth', 2.5, 'HandleVisibility', 'off');
+
+        % Text annotation badge
+        y_mid = (y_t + y_b) / 2;
+        text(ax_cal, kp + cap_w + 2, y_mid, sprintf('%.3fmm/%dpx', th_mm, round(th_px)), ...
+            'Color', 'w', 'FontSize', 9, 'FontWeight', 'bold', ...
+            'BackgroundColor', 'k', 'EdgeColor', 'w', 'Margin', 2);
+    end
+
+    title(ax_cal, sprintf('OCT M-Mode Caliper Measurements — %s', sampleName), 'Color', 'w', 'FontSize', 12, 'FontWeight', 'bold');
+    xlabel(ax_cal, 'Frame index', 'Color', 'w');
+    ylabel(ax_cal, 'Depth (px)', 'Color', 'w');
+    grid(ax_cal, 'on');
+    lgd_cal = legend(ax_cal, 'Location', 'southwest');
+    set(lgd_cal, 'TextColor', 'w', 'Color', 'k', 'EdgeColor', 'w', 'FontSize', 8);
+    hold(ax_cal, 'off');
+
+    saveHighRes(f_cal, fullfile(outDir, sprintf('%s_OCT_MMode_Caliper_Measurements.png', sampleName)), EXPORT_DPI);
+
     fprintf('\n================================================================\n');
     fprintf('  SUCCESS: Analysis Completed for %s\n', sampleName);
     fprintf('  Results saved to: %s\n', outDir);
-    fprintf('  E1 (1.5%%): %.2f kPa | E2 (3.3%%): %.2f kPa | E3 (5.0%%): %.2f kPa\n', ...
+    fprintf('  E1 (1.67%%): %.2f kPa | E2 (3.34%%): %.2f kPa | E3 (5.0%%): %.2f kPa\n', ...
         E_results_kPa(1), E_results_kPa(2), E_results_kPa(3));
     fprintf('================================================================\n');
 

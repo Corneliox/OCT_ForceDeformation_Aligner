@@ -429,9 +429,9 @@ m function stiffnessOCT202606Changethis()
         part1 = (1 - v_poisson^2) / (2 * a_radius * k_factor);
         t0_mm = abs(e_um(idx_titik(1))) / 1000;
         
-        w_target_A = (1.5/100) * t0_mm;
-        w_target_B = (3.3/100) * t0_mm;
-        w_target_C = (5.0/100) * t0_mm;
+        w_target_A = (1.67/100) * t0_mm;
+        w_target_B = (3.34/100) * t0_mm;
+        w_target_C = (5.00/100) * t0_mm;
         
         % Cell arrays for all per-cycle quantities
         disp_l = cell(1,N); force_l = cell(1,N);
@@ -477,8 +477,8 @@ m function stiffnessOCT202606Changethis()
             E_B_kPa{c} = part1 * ((max(0, sl_B) / 1000) * g_gravity) * 1000;
             E_C_kPa{c} = part1 * ((max(0, sl_C) / 1000) * g_gravity) * 1000;
             
-            text_str_c{c} = {sprintf('E1 (1.5%%) : %.2f kPa', E_A_kPa{c}), ...
-                             sprintf('E2 (3.3%%) : %.2f kPa', E_B_kPa{c}), ...
+            text_str_c{c} = {sprintf('E1 (1.67%%) : %.2f kPa', E_A_kPa{c}), ...
+                             sprintf('E2 (3.34%%) : %.2f kPa', E_B_kPa{c}), ...
                              sprintf('E3 (5.0%%) : %.2f kPa', E_C_kPa{c})};
             
             disp_l_sh{c} = disp_l{c} - min(disp_l{c});
@@ -508,8 +508,8 @@ m function stiffnessOCT202606Changethis()
         E_avg_B_kPa = part1 * ((max(0, sl_avg_B) / 1000) * g_gravity) * 1000;
         E_avg_C_kPa = part1 * ((max(0, sl_avg_C) / 1000) * g_gravity) * 1000;
         
-        text_str_avg = {sprintf('E1 (1.5%%) : %.2f kPa', E_avg_A_kPa), ...
-                        sprintf('E2 (3.3%%) : %.2f kPa', E_avg_B_kPa), ...
+        text_str_avg = {sprintf('E1 (1.67%%) : %.2f kPa', E_avg_A_kPa), ...
+                        sprintf('E2 (3.34%%) : %.2f kPa', E_avg_B_kPa), ...
                         sprintf('E3 (5.0%%) : %.2f kPa', E_avg_C_kPa)};
         
         % Table 5 targets (use cycle-B values for hysteresis markers)
@@ -586,8 +586,8 @@ m function stiffnessOCT202606Changethis()
             scatter(ax_cycle{c}, disp_r_sh{c}, force_r{c}, 10, [1 0.7 0.7], 'filled', 'DisplayName', 'Raw Recovery');
             plot(ax_cycle{c}, x_plot_c{c}, fit_L_c{c}, 'b-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Loading');
             plot(ax_cycle{c}, x_plot_c{c}, fit_R_c{c}, 'r-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Recovery');
-            plot(ax_cycle{c}, w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 6, 'DisplayName', 'Target E1 (1.5%)'); text(ax_cycle{c}, w_target_A, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', 'k', 'FontSize', 8, 'FontWeight', 'bold');
-            plot(ax_cycle{c}, w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 6, 'DisplayName', 'Target E2 (3.3%)'); text(ax_cycle{c}, w_target_B, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', 'k', 'FontSize', 8, 'FontWeight', 'bold');
+            plot(ax_cycle{c}, w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 6, 'DisplayName', 'Target E1 (1.67%)'); text(ax_cycle{c}, w_target_A, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', 'k', 'FontSize', 8, 'FontWeight', 'bold');
+            plot(ax_cycle{c}, w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 6, 'DisplayName', 'Target E2 (3.34%)'); text(ax_cycle{c}, w_target_B, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', 'k', 'FontSize', 8, 'FontWeight', 'bold');
             plot(ax_cycle{c}, w_target_C, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 6, 'DisplayName', 'Target E3 (5.0%)'); text(ax_cycle{c}, w_target_C, Pg_C{c}, sprintf(' E3:%.2f kPa', E_C_kPa{c}), 'Color', 'k', 'FontSize', 8, 'FontWeight', 'bold');
             text(ax_cycle{c}, 0.95, 0.05, text_str_c{c}, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', 'BackgroundColor', 'w', 'EdgeColor', 'k', 'FontWeight', 'bold');
             xlabel(ax_cycle{c}, 'Displacement (mm)'); ylabel(ax_cycle{c}, 'Force (g)'); grid(ax_cycle{c}, 'on'); hold(ax_cycle{c}, 'off');
@@ -701,8 +701,8 @@ m function stiffnessOCT202606Changethis()
                 scatter(disp_r_sh{c}, force_r{c}, 20, [1 0.7 0.7], 'filled', 'DisplayName', 'Raw Recovery Data');
                 plot(x_plot_c{c}, fit_L_c{c}, 'b-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Loading');
                 plot(x_plot_c{c}, fit_R_c{c}, 'r-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Recovery');
-                plot(w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (1.5%)'); text(w_target_A, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
-                plot(w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (3.3%)'); text(w_target_B, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
+                plot(w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (1.67%)'); text(w_target_A, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
+                plot(w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (3.34%)'); text(w_target_B, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
                 plot(w_target_C, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3 (5.0%)'); text(w_target_C, Pg_C{c}, sprintf(' E3:%.2f kPa', E_C_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
                 text(0.95, 0.05, text_str_c{c}, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', 'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold');
                 xlabel('Displacement (mm)'); ylabel('Force (g)');
@@ -717,8 +717,8 @@ m function stiffnessOCT202606Changethis()
                 clf(f_export, 'reset'); set(0, 'CurrentFigure', f_export); hold on;
                 plot(x_plot_c{c}, fit_L_c{c}, 'b-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Loading');
                 plot(x_plot_c{c}, fit_R_c{c}, 'r-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Recovery');
-                plot(w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (1.5%)'); text(w_target_A, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
-                plot(w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (3.3%)'); text(w_target_B, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
+                plot(w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (1.67%)'); text(w_target_A, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
+                plot(w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (3.34%)'); text(w_target_B, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
                 plot(w_target_C, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3 (5.0%)'); text(w_target_C, Pg_C{c}, sprintf(' E3:%.2f kPa', E_C_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
                 text(0.95, 0.05, text_str_c{c}, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', 'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold');
                 xlabel('Displacement (mm)'); ylabel('Force (g)');
@@ -732,8 +732,8 @@ m function stiffnessOCT202606Changethis()
             clf(f_export, 'reset'); set(0, 'CurrentFigure', f_export); hold on;
             plot(x_plot_avg, fit_L_avg, 'b-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Loading (Average)');
             plot(x_plot_avg, fit_R_avg, 'r-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Recovery (Average)');
-            plot(w_target_A, Pg_avg_A, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (1.5%)'); text(w_target_A, Pg_avg_A, sprintf(' E1:%.2f kPa', E_avg_A_kPa), 'Color', fg, 'FontWeight', 'bold');
-            plot(w_target_B, Pg_avg_B, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (3.3%)'); text(w_target_B, Pg_avg_B, sprintf(' E2:%.2f kPa', E_avg_B_kPa), 'Color', fg, 'FontWeight', 'bold');
+            plot(w_target_A, Pg_avg_A, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (1.67%)'); text(w_target_A, Pg_avg_A, sprintf(' E1:%.2f kPa', E_avg_A_kPa), 'Color', fg, 'FontWeight', 'bold');
+            plot(w_target_B, Pg_avg_B, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (3.34%)'); text(w_target_B, Pg_avg_B, sprintf(' E2:%.2f kPa', E_avg_B_kPa), 'Color', fg, 'FontWeight', 'bold');
             plot(w_target_C, Pg_avg_C, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3 (5.0%)'); text(w_target_C, Pg_avg_C, sprintf(' E3:%.2f kPa', E_avg_C_kPa), 'Color', fg, 'FontWeight', 'bold');
             text(0.95, 0.05, text_str_avg, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', 'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold');
             xlabel('Displacement (mm)'); ylabel('Force (g)');
@@ -828,7 +828,7 @@ m function stiffnessOCT202606Changethis()
             for s = 1:3
                 cyc_col{end+1} = sprintf('Cycle %d', c); %#ok<AGROW>
             end
-            strain_col = [strain_col; {'E1_1.5%'; 'E2_3.3%'; 'E3_5.0%'}]; %#ok<AGROW>
+            strain_col = [strain_col; {'E1_1.67%'; 'E2_3.34%'; 'E3_5.0%'}]; %#ok<AGROW>
             E_col  = [E_col;  E_A_kPa{c}; E_B_kPa{c}; E_C_kPa{c}]; %#ok<AGROW>
             tgt_col = [tgt_col; target_A{c}; target_B{c}; target_C{c}]; %#ok<AGROW>
             pg_col  = [pg_col;  Pg_A{c}; Pg_B{c}; Pg_C{c}]; %#ok<AGROW>
@@ -843,6 +843,53 @@ m function stiffnessOCT202606Changethis()
         writetable(t5_sheet, filename_xls_full, 'Sheet', '5_Hysteresis_Eval');
         writetable(t6_sheet, filename_xls_full, 'Sheet', '6_Donut_Plot');
         writetable(t7_sheet, filename_xls_full, 'Sheet', '7_Strain_Stiffening');
+
+        % ---- OCT M-Mode Caliper Measurements Export ----
+        f_cal = figure('Visible', 'off', 'Position', [100, 100, 1000, 650], 'Color', 'k');
+        ax_cal = axes('Parent', f_cal);
+        set(ax_cal, 'Color', [0.1 0.1 0.1], 'XColor', 'w', 'YColor', 'w', 'GridColor', [0.3 0.3 0.3]);
+        hold(ax_cal, 'on');
+
+        frames_x = 1:size(data_oct, 1);
+        top_sc = abs(data_oct{:, 5});
+        if size(data_oct, 2) >= 6, bot_sc = abs(data_oct{:, 6}); else, bot_sc = top_sc; end
+        if size(data_oct, 2) >= 7, end_ed = abs(data_oct{:, 7}); else, end_ed = top_sc + (t0_mm*1000/pixel_to_um); end
+
+        plot(ax_cal, frames_x, top_sc, 'r-', 'LineWidth', 2.0, 'DisplayName', 'top SC');
+        if any(bot_sc ~= top_sc)
+            plot(ax_cal, frames_x, bot_sc, 'y-', 'LineWidth', 2.0, 'DisplayName', 'bot SC');
+        end
+        plot(ax_cal, frames_x, end_ed, 'g-', 'LineWidth', 2.0, 'DisplayName', 'end ED');
+        set(ax_cal, 'YDir', 'reverse');
+
+        cap_w = max(3, round(length(frames_x) * 0.01));
+        for p_idx = 1:length(idx_titik)
+            kp = idx_titik(p_idx);
+            y_t = top_sc(kp);
+            y_b = end_ed(kp);
+            th_px = abs(y_b - y_t);
+            th_mm = th_px * pixel_to_um / 1000;
+
+            plot(ax_cal, [kp, kp], [y_t, y_b], 'w-', 'LineWidth', 2.0, 'HandleVisibility', 'off');
+            plot(ax_cal, [kp - cap_w, kp + cap_w], [y_t, y_t], 'w-', 'LineWidth', 2.5, 'HandleVisibility', 'off');
+            plot(ax_cal, [kp - cap_w, kp + cap_w], [y_b, y_b], 'w-', 'LineWidth', 2.5, 'HandleVisibility', 'off');
+
+            y_mid = (y_t + y_b) / 2;
+            text(ax_cal, kp + cap_w + 2, y_mid, sprintf('%.3fmm/%dpx', th_mm, round(th_px)), ...
+                'Color', 'w', 'FontSize', 9, 'FontWeight', 'bold', ...
+                'BackgroundColor', 'k', 'EdgeColor', 'w', 'Margin', 2);
+        end
+
+        title(ax_cal, sprintf('OCT M-Mode Caliper Measurements — %s', sampleName), 'Color', 'w', 'FontSize', 12, 'FontWeight', 'bold');
+        xlabel(ax_cal, 'Frame index', 'Color', 'w');
+        ylabel(ax_cal, 'Depth (px)', 'Color', 'w');
+        grid(ax_cal, 'on');
+        lgd_cal = legend(ax_cal, 'Location', 'southwest');
+        set(lgd_cal, 'TextColor', 'w', 'Color', 'k', 'EdgeColor', 'w', 'FontSize', 8);
+        hold(ax_cal, 'off');
+
+        saveHighRes(f_cal, fullfile(outDir_full, sprintf('%s_OCT_MMode_Caliper_Measurements.png', sampleName)), EXPORT_DPI);
+        close(f_cal);
 
 
         % --------------------------------------------------------------------
@@ -943,8 +990,8 @@ m function stiffnessOCT202606Changethis()
                 scatter(disp_r_sh{c}, force_r{c}, 20, [1 0.7 0.7], 'filled', 'DisplayName', 'Raw Recovery Data');
                 plot(x_plot_c{c}, fit_L_c{c}, 'b-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Loading');
                 plot(x_plot_c{c}, fit_R_c{c}, 'r-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Recovery');
-                plot(w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (1.5%)'); text(w_target_A, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
-                plot(w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (3.3%)'); text(w_target_B, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
+                plot(w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (1.67%)'); text(w_target_A, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
+                plot(w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (3.34%)'); text(w_target_B, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
                 plot(w_target_C, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3 (5.0%)'); text(w_target_C, Pg_C{c}, sprintf(' E3:%.2f kPa', E_C_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
                 text(0.95, 0.05, text_str_c{c}, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', 'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold');
                 xlabel('Displacement (mm)'); ylabel('Force (g)');
@@ -956,8 +1003,8 @@ m function stiffnessOCT202606Changethis()
                 clf(f_export_c, 'reset'); set(0, 'CurrentFigure', f_export_c); hold on;
                 plot(x_plot_c{c}, fit_L_c{c}, 'b-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Loading');
                 plot(x_plot_c{c}, fit_R_c{c}, 'r-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Recovery');
-                plot(w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (1.5%)'); text(w_target_A, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
-                plot(w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (3.3%)'); text(w_target_B, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
+                plot(w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1 (1.67%)'); text(w_target_A, Pg_A{c}, sprintf(' E1:%.2f kPa', E_A_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
+                plot(w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2 (3.34%)'); text(w_target_B, Pg_B{c}, sprintf(' E2:%.2f kPa', E_B_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
                 plot(w_target_C, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3 (5.0%)'); text(w_target_C, Pg_C{c}, sprintf(' E3:%.2f kPa', E_C_kPa{c}), 'Color', fg, 'FontWeight', 'bold');
                 text(0.95, 0.05, text_str_c{c}, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', 'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold');
                 xlabel('Displacement (mm)'); ylabel('Force (g)');
@@ -1026,7 +1073,7 @@ m function stiffnessOCT202606Changethis()
                 'VariableNames', {'Evaluation_Regime', 'Stiffness_Value_kPa', 'Evaluation_Strain_Target_mm', 'Extracted_Force_Value_g'});
             t6_sheet_c = table(theta_c(:), X_disp_c(:), Y_disp_c(:), 'VariableNames', {'Theta_Radians', 'Cartesian_X', 'Cartesian_Y'});
             t7_sheet_c = table({sprintf('Cycle %d', c); sprintf('Cycle %d', c); sprintf('Cycle %d', c)}, ...
-                {'E1_1.5%'; 'E2_3.3%'; 'E3_5.0%'}, ...
+                {'E1_1.67%'; 'E2_3.34%'; 'E3_5.0%'}, ...
                 [E_A_kPa{c}; E_B_kPa{c}; E_C_kPa{c}], ...
                 [target_A{c}; target_B{c}; target_C{c}], ...
                 [Pg_A{c}; Pg_B{c}; Pg_C{c}], ...
