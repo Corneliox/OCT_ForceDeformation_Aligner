@@ -265,8 +265,13 @@ function stiffnessOCT202606Original_Changethis()
         
         time_oct_sec = (0:length(data_E_raw)-1)' / fps_oct;
         
-        % Original deformation based on layer thickness change
-        displacement_mm_temp = abs(thickness_um_all - thickness_um_all(1)) / 1000;
+        % Surface movement for crystal-clear cycle annotation
+        e_um = data_E_raw * pixel_to_um;
+        displacement_surface_mm = abs(e_um - e_um(1)) / 1000;
+        displacement_annot = smoothdata(displacement_surface_mm, 'sgolay', 15);
+        
+        % Clean smoothed layer thickness for biomechanical evaluation (Original Mode)
+        thickness_um_clean = smoothdata(thickness_um_all, 'sgolay', 21);
         
         % ====================================================================
         % 2. INTERACTIVE COORDINATE PINPOINTING (OCT CURVE ONLY)
@@ -275,7 +280,7 @@ function stiffnessOCT202606Original_Changethis()
             'Position', [120, 120, 1080, 520], 'Color', 'w');
         
         ax_annot = axes('Parent', hFig);
-        plot(ax_annot, time_oct_sec, displacement_mm_temp, 'b-', 'LineWidth', 1.8); grid(ax_annot, 'on');
+        plot(ax_annot, time_oct_sec, displacement_annot, 'b-', 'LineWidth', 1.8); grid(ax_annot, 'on');
         ylabel(ax_annot, 'Deformation (mm)', 'FontWeight', 'bold');
         xlabel(ax_annot, 'Time (seconds)', 'FontWeight', 'bold');
         hold(ax_annot, 'on');
@@ -323,7 +328,7 @@ function stiffnessOCT202606Original_Changethis()
             idx_curr = min([find(time_oct_sec >= x_val, 1, 'first'), length(time_oct_sec)]);
             if isempty(idx_curr), idx_curr = 1; end
             x_snap = time_oct_sec(idx_curr);
-            y_snap = displacement_mm_temp(idx_curr);
+            y_snap = displacement_annot(idx_curr);
             
             x_oct(k) = x_snap;
             h_oct_guides{k} = plot(ax_annot, [x_val, x_snap], [y_val, y_snap], 'm--', 'LineWidth', 1.2);
@@ -341,8 +346,8 @@ function stiffnessOCT202606Original_Changethis()
         % ====================================================================
         % 3. POST-LABELING ORIENTATION & FILTERING
         % ====================================================================
-        % Original layer thickness displacement (SC - ED)
-        displacement_mm_normal = abs(thickness_um_all - thickness_um_all(idx_titik(1))) / 1000;
+        % Original layer thickness displacement (SC - ED) with jitter removal
+        displacement_mm_normal = abs(thickness_um_clean - thickness_um_clean(idx_titik(1))) / 1000;
         displacement_mm_inv    = -displacement_mm_normal;
         
         if FILTER_MODE >= 1
@@ -385,7 +390,7 @@ function stiffnessOCT202606Original_Changethis()
         v_poisson = 0.45; a_radius = 2.5; k_factor = 3.085; g_gravity = 9.81;
         part1 = (1 - v_poisson^2) / (2 * a_radius * k_factor);
         % Original initial layer thickness t0
-        t0_mm = thickness_um_all(idx_titik(1)) / 1000;
+        t0_mm = thickness_um_clean(idx_titik(1)) / 1000;
         
         w_target_A = (1.67/100) * t0_mm;
         w_target_B = (3.34/100) * t0_mm;
