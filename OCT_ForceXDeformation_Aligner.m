@@ -1,4 +1,4 @@
-m function OCT_ForceXDeformation_Aligner()
+function OCT_ForceXDeformation_Aligner()
     % ============================================================
     % CONFIGURATION — Defaults: 3 Waves, Mode 0: Raw, DPI: 300 (High Res)
     % ============================================================

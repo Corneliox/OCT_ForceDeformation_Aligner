@@ -1,571 +1,962 @@
-%% stiffnessOCT202606Original_Changethis.m
-% Original Single-Cycle OCT Skin Stiffness & Thickness Analysis Engine
-% Features:
-%   - Interactive directory / sample selection dialog (uigetdir)
-%   - Automated discovery of timeseries.csv in root or *_analysis subfolders
-%   - 3-Phase Interactive Annotation (First Maximum, Minimum, Second Maximum)
-%   - Calibrated Power-Law & Parabolic Hysteresis Modeling
-%   - Standardized Young's Modulus (E1: 1.5%, E2: 3.3%, E3: 5.0%) calculations
-%   - Automated 300 DPI PNG (Light & Dark) & Excel exports into 'Hasil_Analisis_Original'
-%   - Full English UI & Internationalization (i18n)
-
 function stiffnessOCT202606Original_Changethis()
-    clc;
-    close all;
+    % =========================================================================
+    % OCT Original Multi-Cycle Stiffness Analyzer (Auto-Force Edition)
+    % Designed for uncalibrated / missing pump CSV data.
+    % Features:
+    %   - Resizable Multi-Cycle UI Grid (Supports 1 to 5 cycles/waves)
+    %   - Batch scanning: detects any *_analysis/timeseries.csv without requiring .csv pump file
+    %   - Single-Curve Interactive Annotation on OCT Deformation (2N + 1 points)
+    %     with Vertical Snapping & Backspace Undo
+    %   - Automatic multi-cycle force generation (0 -> 1g loading, parabolic recovery 1 -> 0g)
+    %   - Complete 300 DPI Export Engine (Light & Dark Themes):
+    %       * Full_Cycle/ (Tables 1 to 14, Donut, Composite, Caliper, FullCycle_Summary.xlsx)
+    %       * Isolated Cycle_1/ to Cycle_N/ subfolders
+    %       * Original Overview Graphics (Subplot 1, 2, 3 Dual-Axis, 3-in-1 Composite)
+    % =========================================================================
 
-    disp('================================================================');
-    disp('   OCT Original Single-Cycle Stiffness Analyzer (Standalone)   ');
-    disp('================================================================');
+    % Configuration Defaults
+    NUM_CYCLES  = 3;   % Default: 3 waves (selectable from 1 to 5)
+    FILTER_MODE = 0;   % Default: 0 = Raw, 1 = Savitzky-Golay Filter
+    EXPORT_DPI  = 300; % Default: 300 DPI (High Resolution)
+    FONT_NAME   = 'Arial';
 
-    %% 1. Interactive Source Directory Selection
-    start_path = pwd;
-    sel_dir = uigetdir(start_path, 'Select OCT Data Folder (containing timeseries.csv or sample folders)');
+    % 1. MAIN UI WINDOW CREATION (Resizable)
+    fig = uifigure('Name', sprintf('OCT Original Multi-Cycle Stiffness Analyzer (Auto-Force) - %d Waves', NUM_CYCLES), ...
+        'Position', [50, 50, 1360, 1060], 'AutoResizeChildren', 'off');
     
-    if isequal(sel_dir, 0)
-        disp('Operation cancelled by user.');
-        return;
+    parentDir = '';
+    validSamples = {}; 
+
+    % 2. CONTROL INTERFACE COMPONENTS
+    lblHeader = uilabel(fig, 'Text', sprintf('1. Select Parent Folder (Contains *_analysis folders)  |  Waves: %d', NUM_CYCLES), ...
+        'FontWeight', 'bold', 'FontSize', 14);
+    
+    btnBrowse = uibutton(fig, 'Text', 'Browse Folder', 'ButtonPushedFcn', @(btn,event) selectFolder());
+    lblFolder = uilabel(fig, 'Text', 'No folder selected');
+    
+    lblWaves = uilabel(fig, 'Text', 'Wave Count:', 'FontWeight', 'bold');
+    ddlWaves = uidropdown(fig, 'Items', {'1 Wave', '2 Waves', '3 Waves', '4 Waves', '5 Waves'}, ...
+        'ItemsData', [1, 2, 3, 4, 5], 'Value', NUM_CYCLES, ...
+        'ValueChangedFcn', @(dd, event) changeWaves(dd.Value));
+        
+    lblFilter = uilabel(fig, 'Text', 'Filter Mode:', 'FontWeight', 'bold');
+    ddlFilter = uidropdown(fig, 'Items', {'1. Raw Signal (Unfiltered)', '2. Savitzky-Golay Filter'}, ...
+        'ItemsData', [0, 1], 'Value', FILTER_MODE, ...
+        'ValueChangedFcn', @(dd, event) changeFilter(dd.Value));
+        
+    lblDPI = uilabel(fig, 'Text', 'Export DPI:', 'FontWeight', 'bold');
+    ddlDPI = uidropdown(fig, 'Items', {'300 DPI (High Res)', '600 DPI (Ultra High Res)', '150 DPI (Standard)'}, ...
+        'ItemsData', [300, 600, 150], 'Value', EXPORT_DPI, ...
+        'ValueChangedFcn', @(dd, event) changeDPI(dd.Value));
+    
+    lblSamplesHeader = uilabel(fig, 'Text', '2. Detected Sample List (No pump CSV required):', 'FontWeight', 'bold');
+    lstSamples = uilistbox(fig);
+    
+    btnProcess = uibutton(fig, 'Text', 'PROCESS ALL SAMPLES', ...
+        'FontWeight', 'bold', 'FontSize', 16, 'BackgroundColor', [0.15 0.55 0.25], 'FontColor', 'w', ...
+        'ButtonPushedFcn', @(btn,event) processSamples());
+    
+    lblStatus = uilabel(fig, 'Text', 'Status: Select folder to begin...', 'FontColor', 'b', 'FontSize', 14);
+    
+    % 3. STANDARDIZED UI GRID — Rows 1 and 2 are fixed (6 panels)
+    ax_def_normal = uiaxes(fig); title(ax_def_normal, '1. Deformation Normal (Red)');
+    ax_def_inv    = uiaxes(fig); title(ax_def_inv, '2. Deformation -1 (Red)');
+    ax_force_time = uiaxes(fig); title(ax_force_time, '3. Auto-Modeled Force (Blue)');
+    
+    ax_merged     = uiaxes(fig); title(ax_merged, '4. Deformation -1 x Auto-Force Merged (Red/Blue)');
+    ax_hyst_final = uiaxes(fig); title(ax_hyst_final, '5. Hysteresis Evaluation (Multi-Cycle)');
+    ax_donut      = uiaxes(fig); title(ax_donut, '6. Donut Table Graph Panel');
+    
+    % Row 3: Dynamic cycle panels
+    ax_cycle = {};
+    createCycleAxes(NUM_CYCLES);
+
+    fig.SizeChangedFcn = @(~,~) onWindowResize();
+    onWindowResize();
+
+    function createCycleAxes(n)
+        if ~isempty(ax_cycle)
+            for k = 1:length(ax_cycle)
+                if isvalid(ax_cycle{k}), delete(ax_cycle{k}); end
+            end
+        end
+        ax_cycle = cell(1, n);
+        for c = 1:n
+            ax_cycle{c} = uiaxes(fig);
+            title(ax_cycle{c}, sprintf('%d. Cycle %d Strain-Stiffening', 6+c, c));
+        end
     end
 
-    % Check if timeseries.csv is in the selected directory directly
-    direct_csv = fullfile(sel_dir, 'timeseries.csv');
-    if exist(direct_csv, 'file')
-        [~, sampleName] = fileparts(sel_dir);
-        csvFile = direct_csv;
-        baseFolder = sel_dir;
-    else
-        % Search for *_analysis folders containing timeseries.csv
-        subdirs = dir(fullfile(sel_dir, '*_analysis'));
-        subdirs = subdirs([subdirs.isdir]);
+    function changeWaves(val)
+        NUM_CYCLES = val;
+        lblHeader.Text = sprintf('1. Select Parent Folder (Contains *_analysis folders)  |  Waves: %d', NUM_CYCLES);
+        fig.Name = sprintf('OCT Original Multi-Cycle Stiffness Analyzer (Auto-Force) - %d Waves', NUM_CYCLES);
+        createCycleAxes(NUM_CYCLES);
+        onWindowResize();
+    end
+
+    function changeFilter(val)
+        FILTER_MODE = val;
+    end
+
+    function changeDPI(val)
+        EXPORT_DPI = val;
+    end
+
+    function onWindowResize()
+        W = max(800, fig.Position(3));
+        H = max(600, fig.Position(4));
+
+        lblHeader.Position = [20, H - 35, W - 40, 25];
+        btnBrowse.Position = [20, H - 70, 120, 30];
+        lblFolder.Position = [150, H - 70, max(100, W - 920), 30];
         
-        valid_samples = {};
-        for k = 1:length(subdirs)
-            cand_csv = fullfile(sel_dir, subdirs(k).name, 'timeseries.csv');
-            if exist(cand_csv, 'file')
-                valid_samples{end+1} = subdirs(k).name; %#ok<AGROW>
+        lblWaves.Position  = [W - 760, H - 70, 85, 30];
+        ddlWaves.Position  = [W - 675, H - 70, 75, 30];
+        
+        lblFilter.Position = [W - 590, H - 70, 75, 30];
+        ddlFilter.Position = [W - 510, H - 70, 210, 30];
+        
+        lblDPI.Position    = [W - 290, H - 70, 90, 30];
+        ddlDPI.Position    = [W - 195, H - 70, 175, 30];
+
+        lblSamplesHeader.Position = [20, H - 100, 320, 20];
+        
+        lstW = min(420, floor(W * 0.32));
+        lstSamples.Position = [20, H - 200, lstW, 95];
+        btnProcess.Position = [lstW + 30, H - 200, min(250, W - lstW - 60), 95];
+        lblStatus.Position  = [20, H - 230, W - 40, 25];
+
+        grid_top = H - 240;
+        grid_bottom = 15;
+        avail_h = max(240, grid_top - grid_bottom);
+        row_h = floor((avail_h - 30) / 3);
+        col_w3 = floor((W - 60) / 3);
+
+        % Row 1
+        y1 = grid_bottom + 2*row_h + 20;
+        ax_def_normal.Position = [20, y1, col_w3, row_h];
+        ax_def_inv.Position    = [20 + col_w3 + 10, y1, col_w3, row_h];
+        ax_force_time.Position = [20 + 2*col_w3 + 20, y1, col_w3, row_h];
+
+        % Row 2
+        y2 = grid_bottom + row_h + 10;
+        ax_merged.Position     = [20, y2, col_w3, row_h];
+        ax_hyst_final.Position = [20 + col_w3 + 10, y2, col_w3, row_h];
+        ax_donut.Position      = [20 + 2*col_w3 + 20, y2, col_w3, row_h];
+
+        % Row 3
+        y3 = grid_bottom;
+        N_c = length(ax_cycle);
+        col_wn = floor((W - 40 - (N_c - 1)*10) / N_c);
+        for c = 1:N_c
+            if isvalid(ax_cycle{c})
+                ax_cycle{c}.Position = [20 + (c-1)*(col_wn + 10), y3, col_wn, row_h];
+            end
+        end
+    end
+    
+    %% Function: Select Folder (No pump CSV required!)
+    function selectFolder()
+        selDir = uigetdir('', 'Select Parent Folder containing OCT sample folders');
+        if selDir == 0, return; end
+        parentDir = selDir;
+        lblFolder.Text = parentDir;
+        
+        % Check for direct timeseries.csv in selected folder
+        direct_csv = fullfile(parentDir, 'timeseries.csv');
+        if exist(direct_csv, 'file')
+            [~, sampleName] = fileparts(parentDir);
+            sampleName = regexprep(sampleName, '_analysis$', '');
+            validSamples = {{sampleName, direct_csv}};
+            lstSamples.Items = {sprintf('[Ready] Sample: %s', sampleName)};
+            lblStatus.Text = 'Status: 1 direct sample detected.';
+            return;
+        end
+        
+        % Search for *_analysis folders
+        subDirs = dir(fullfile(parentDir, '*_analysis'));
+        subDirs = subDirs([subDirs.isdir]);
+        tempList = {};
+        tempDisplay = {};
+        
+        for i = 1:length(subDirs)
+            folderName = subDirs(i).name;
+            baseName = regexprep(folderName, '_analysis$', '');
+            octFile = fullfile(parentDir, folderName, 'timeseries.csv');
+            
+            if exist(octFile, 'file')
+                tempList{end+1} = {baseName, octFile}; %#ok<AGROW>
+                tempDisplay{end+1} = sprintf('[Ready] Sample: %s', baseName); %#ok<AGROW>
             end
         end
         
-        if isempty(valid_samples)
-            % Check recursive search for any timeseries.csv
-            any_csv = dir(fullfile(sel_dir, '**', 'timeseries.csv'));
-            if isempty(any_csv)
-                errordlg(sprintf('No "timeseries.csv" file found in:\n%s\nPlease select a valid OCT analysis directory.', sel_dir), ...
-                    'File Not Found Error', 'modal');
-                return;
+        % If none found, search recursively for any timeseries.csv
+        if isempty(tempList)
+            all_csv = dir(fullfile(parentDir, '**', 'timeseries.csv'));
+            for k = 1:length(all_csv)
+                [~, fldName] = fileparts(all_csv(k).folder);
+                baseName = regexprep(fldName, '_analysis$', '');
+                tempList{end+1} = {baseName, fullfile(all_csv(k).folder, all_csv(k).name)}; %#ok<AGROW>
+                tempDisplay{end+1} = sprintf('[Ready] Sample: %s', baseName); %#ok<AGROW>
+            end
+        end
+        
+        validSamples = tempList;
+        lstSamples.Items = tempDisplay;
+        lblStatus.Text = sprintf('Status: %d sample(s) ready for processing.', length(validSamples));
+    end
+    
+    %% Function: Process All Samples
+    function processSamples()
+        if isempty(validSamples)
+            uialert(fig, 'No valid samples found in the selected folder!', 'Warning');
+            return;
+        end
+        
+        outputMainDir = fullfile(parentDir, 'Hasil_Analisis_Original');
+        if ~exist(outputMainDir, 'dir'), mkdir(outputMainDir); end
+        
+        for i = 1:length(validSamples)
+            sampleName = validSamples{i}{1};
+            octFile    = validSamples{i}{2};
+            
+            lblStatus.Text = sprintf('Status: Annotating %s (%d/%d)...', sampleName, i, length(validSamples));
+            drawnow; 
+            
+            outputSubDir = fullfile(outputMainDir, sampleName);
+            if ~exist(outputSubDir, 'dir'), mkdir(outputSubDir); end
+            
+            try
+                runMultiCycleAnalysis(sampleName, octFile, outputSubDir);
+            catch ME
+                warning('Failed to process %s: %s', sampleName, ME.message);
+                errordlg(sprintf('Error on %s: %s', sampleName, ME.message), 'Analysis Error');
+            end
+        end
+        lblStatus.Text = 'Status: ALL SAMPLES PROCESSED SUCCESSFULLY.';
+        uialert(fig, 'Multi-Cycle Analysis & 300 DPI Export Complete!', 'Success');
+    end
+    
+    %% Function: Core Multi-Cycle Analysis & Auto-Force Generation
+    function runMultiCycleAnalysis(sampleName, octFile, outDir)
+        N = NUM_CYCLES;
+        n_pts = 2*N + 1; % Start 1, Peak 1, End 1, Peak 2, End 2, ...
+        cycle_colors = {'r', 'g', 'b', 'm', 'c'};
+
+        % ====================================================================
+        % 1. DATA INGESTION
+        % ====================================================================
+        data_oct = readtable(octFile); 
+        if size(data_oct, 2) < 5
+            error('timeseries.csv must have at least 5 columns.');
+        end
+        data_E_raw = data_oct{:, 5}; 
+        
+        pixel_to_um = 1000 / 200; % 5 um/px
+        fps_oct = 25;
+        time_oct_sec = (0:length(data_E_raw)-1)' / fps_oct;
+        
+        e_um = data_E_raw * pixel_to_um;
+        displacement_mm_temp = abs(e_um - e_um(1)) / 1000;
+        
+        % ====================================================================
+        % 2. INTERACTIVE COORDINATE PINPOINTING (OCT CURVE ONLY)
+        % ====================================================================
+        hFig = figure('Name', sprintf('Cycle Partition Annotation (%d Waves): %s', N, sampleName), ...
+            'Position', [120, 120, 1080, 520], 'Color', 'w');
+        
+        ax_annot = axes('Parent', hFig);
+        plot(ax_annot, time_oct_sec, displacement_mm_temp, 'b-', 'LineWidth', 1.8); grid(ax_annot, 'on');
+        ylabel(ax_annot, 'Deformation (mm)', 'FontWeight', 'bold');
+        xlabel(ax_annot, 'Time (seconds)', 'FontWeight', 'bold');
+        hold(ax_annot, 'on');
+        
+        x_oct = zeros(n_pts, 1);
+        h_oct_plots  = cell(1, n_pts);
+        h_oct_texts  = cell(1, n_pts);
+        h_oct_guides = cell(1, n_pts);
+        
+        labels_oct = cell(1, n_pts);
+        labels_oct{1} = 'Start Pull 1';
+        for c = 1:N
+            labels_oct{2*c}   = sprintf('Peak (Max Indentation) %d', c);
+            labels_oct{2*c+1} = sprintf('End Recovery %d', c);
+        end
+        
+        k = 1;
+        while k <= n_pts
+            if k > 1
+                title(ax_annot, {sprintf('CLICK POINT (%d/%d): %s', k, n_pts, labels_oct{k}), ...
+                                 '[Press Backspace or Delete to Undo previous click]'}, ...
+                                 'Color', 'b', 'FontSize', 12, 'FontWeight', 'bold');
             else
-                csvFile = fullfile(any_csv(1).folder, any_csv(1).name);
-                [~, sampleName] = fileparts(any_csv(1).folder);
-                sampleName = regexprep(sampleName, '_analysis$', '');
-                baseFolder = any_csv(1).folder;
+                title(ax_annot, sprintf('CLICK POINT (%d/%d): %s', k, n_pts, labels_oct{k}), ...
+                    'Color', 'b', 'FontSize', 12, 'FontWeight', 'bold');
             end
-        elseif length(valid_samples) == 1
-            sampleDirName = valid_samples{1};
-            sampleName = regexprep(sampleDirName, '_analysis$', '');
-            csvFile = fullfile(sel_dir, sampleDirName, 'timeseries.csv');
-            baseFolder = fullfile(sel_dir, sampleDirName);
-        else
-            [idx_sel, ok] = listdlg('ListString', valid_samples, ...
-                'SelectionMode', 'single', ...
-                'Name', 'Select Sample', ...
-                'PromptString', 'Select OCT sample to analyze:', ...
-                'ListSize', [320, 200]);
-            if ~ok
-                disp('Sample selection cancelled.');
-                return;
+            
+            [x_val, y_val, btn] = ginput(1);
+            
+            % Backspace (8), Delete (127), 'b'/'B' (98/66) Undo
+            if isempty(btn) || btn == 8 || btn == 127 || btn == 98 || btn == 66
+                if k > 1
+                    k_prev = k - 1;
+                    if ~isempty(h_oct_plots{k_prev}) && isvalid(h_oct_plots{k_prev}), delete(h_oct_plots{k_prev}); end
+                    if ~isempty(h_oct_texts{k_prev}) && isvalid(h_oct_texts{k_prev}), delete(h_oct_texts{k_prev}); end
+                    if ~isempty(h_oct_guides{k_prev}) && isvalid(h_oct_guides{k_prev}), delete(h_oct_guides{k_prev}); end
+                    h_oct_plots{k_prev} = []; h_oct_texts{k_prev} = []; h_oct_guides{k_prev} = [];
+                    x_oct(k_prev) = 0;
+                    k = k_prev;
+                end
+                continue;
             end
-            sampleDirName = valid_samples{idx_sel};
-            sampleName = regexprep(sampleDirName, '_analysis$', '');
-            csvFile = fullfile(sel_dir, sampleDirName, 'timeseries.csv');
-            baseFolder = fullfile(sel_dir, sampleDirName);
+            
+            % Vertical Snapping onto curve
+            idx_curr = min([find(time_oct_sec >= x_val, 1, 'first'), length(time_oct_sec)]);
+            if isempty(idx_curr), idx_curr = 1; end
+            x_snap = time_oct_sec(idx_curr);
+            y_snap = displacement_mm_temp(idx_curr);
+            
+            x_oct(k) = x_snap;
+            h_oct_guides{k} = plot(ax_annot, [x_val, x_snap], [y_val, y_snap], 'm--', 'LineWidth', 1.2);
+            h_oct_plots{k}  = plot(ax_annot, x_snap, y_snap, 'mo', 'MarkerFaceColor', 'm', 'MarkerSize', 8);
+            h_oct_texts{k}  = text(ax_annot, x_snap, y_snap, sprintf(' %d: %s', k, labels_oct{k}), ...
+                'Color', 'k', 'FontWeight', 'bold', 'FontSize', 9);
+            drawnow;
+            k = k + 1;
         end
+        
+        get_idx_oct = @(x) min([find(time_oct_sec >= x, 1, 'first'), length(time_oct_sec)]);
+        idx_titik = arrayfun(get_idx_oct, sort(x_oct));
+        close(hFig);
+        
+        % ====================================================================
+        % 3. POST-LABELING ORIENTATION & FILTERING
+        % ====================================================================
+        displacement_mm_normal = abs(e_um - e_um(idx_titik(1))) / 1000;
+        e_um_inv = -e_um;
+        displacement_mm_inv = (e_um_inv - e_um_inv(idx_titik(1))) / 1000;
+        
+        if FILTER_MODE >= 1
+            displacement_mm_normal = smoothdata(displacement_mm_normal, 'sgolay', 25);
+            displacement_mm_inv    = smoothdata(displacement_mm_inv, 'sgolay', 25);
+        end
+
+        % ====================================================================
+        % 4. AUTOMATIC FORCE PROFILE SYNTHESIS (0-1g Loading, Parabolic 1-0g Recovery)
+        % ====================================================================
+        force_interp_oct = zeros(size(time_oct_sec));
+        
+        for c = 1:N
+            i_start = idx_titik(2*c - 1);
+            i_peak  = idx_titik(2*c);
+            i_end   = idx_titik(2*c + 1);
+            
+            n_load = max(2, i_peak - i_start + 1);
+            n_rec  = max(2, i_end - i_peak + 1);
+            
+            % Loading: linear ramp 0 -> 1 g
+            f_load = linspace(0, 1, n_load)';
+            
+            % Recovery: parabolic decay 1 -> 0 g
+            t_rel  = linspace(0, 1, n_rec)';
+            f_rec  = (1 - t_rel).^2;
+            
+            force_interp_oct(i_start:i_peak) = f_load;
+            force_interp_oct(i_peak:i_end)   = f_rec;
+        end
+        
+        if FILTER_MODE >= 1
+            force_interp_oct = smoothdata(force_interp_oct, 'sgolay', 31);
+        end
+        force_interp_oct(force_interp_oct < 0) = 0;
+
+        % ====================================================================
+        % 5. MULTI-CYCLE STIFFNESS & ELASTIC MECHANICS EVALUATION
+        % ====================================================================
+        v_poisson = 0.45; a_radius = 2.5; k_factor = 3.085; g_gravity = 9.81;
+        part1 = (1 - v_poisson^2) / (2 * a_radius * k_factor);
+        t0_mm = abs(e_um(idx_titik(1))) / 1000;
+        
+        w_target_A = (1.67/100) * t0_mm;
+        w_target_B = (3.34/100) * t0_mm;
+        w_target_C = (5.00/100) * t0_mm;
+        
+        disp_l = cell(1,N); force_l = cell(1,N);
+        disp_r = cell(1,N); force_r = cell(1,N);
+        disp_s = cell(1,N); force_s = cell(1,N);
+        a_L = cell(1,N);  b_L = cell(1,N);
+        a_R = cell(1,N);  b_R = cell(1,N);
+        x_plot_c = cell(1,N); fit_L_c = cell(1,N); fit_R_c = cell(1,N);
+        x_max_c  = cell(1,N);
+        Pg_A = cell(1,N); Pg_B = cell(1,N); Pg_C = cell(1,N);
+        E_A_kPa = cell(1,N); E_B_kPa = cell(1,N); E_C_kPa = cell(1,N);
+        target_A = cell(1,N); target_B = cell(1,N); target_C = cell(1,N);
+        text_str_c = cell(1,N);
+        disp_l_sh = cell(1,N); disp_r_sh = cell(1,N);
+        
+        for c = 1:N
+            i_start = idx_titik(2*c - 1);
+            i_peak  = idx_titik(2*c);
+            i_end   = idx_titik(2*c + 1);
+            
+            disp_l{c}  = displacement_mm_normal(i_start:i_peak);
+            force_l{c} = force_interp_oct(i_start:i_peak);
+            disp_r{c}  = displacement_mm_normal(i_peak:i_end);
+            force_r{c} = force_interp_oct(i_peak:i_end);
+            disp_s{c}  = displacement_mm_normal(i_start:i_end);
+            force_s{c} = force_interp_oct(i_start:i_end);
+            
+            target_A{c} = min(disp_l{c}) + w_target_A;
+            target_B{c} = min(disp_l{c}) + w_target_B;
+            target_C{c} = min(disp_l{c}) + w_target_C;
+            
+            [a_L{c}, b_L{c}, a_R{c}, b_R{c}, x_plot_c{c}, fit_L_c{c}, fit_R_c{c}, x_max_c{c}] = ...
+                fit_power_law_extended(disp_l{c}, force_l{c}, disp_r{c}, force_r{c}, w_target_C);
+            
+            Pg_A{c} = a_L{c} * (w_target_A ^ b_L{c});
+            Pg_B{c} = a_L{c} * (w_target_B ^ b_L{c});
+            Pg_C{c} = a_L{c} * (w_target_C ^ b_L{c});
+            
+            sl_A = a_L{c} * b_L{c} * (w_target_A ^ (b_L{c}-1));
+            sl_B = a_L{c} * b_L{c} * (w_target_B ^ (b_L{c}-1));
+            sl_C = a_L{c} * b_L{c} * (w_target_C ^ (b_L{c}-1));
+            E_A_kPa{c} = part1 * ((max(0, sl_A) / 1000) * g_gravity) * 1000;
+            E_B_kPa{c} = part1 * ((max(0, sl_B) / 1000) * g_gravity) * 1000;
+            E_C_kPa{c} = part1 * ((max(0, sl_C) / 1000) * g_gravity) * 1000;
+            
+            text_str_c{c} = {sprintf('E1 (1.67%%) : %.2f kPa', E_A_kPa{c}), ...
+                             sprintf('E2 (3.34%%) : %.2f kPa', E_B_kPa{c}), ...
+                             sprintf('E3 (5.00%%) : %.2f kPa', E_C_kPa{c})};
+            
+            disp_l_sh{c} = disp_l{c} - min(disp_l{c});
+            disp_r_sh{c} = disp_r{c} - min(disp_l{c});
+        end
+        
+        % Multi-Cycle Averages
+        a_L_avg = mean(cellfun(@(x) x, a_L)); b_L_avg = mean(cellfun(@(x) x, b_L));
+        a_R_avg = mean(cellfun(@(x) x, a_R)); b_R_avg = mean(cellfun(@(x) x, b_R));
+        x_max_avg = max(mean(cellfun(@(x) x, x_max_c)), w_target_C * 1.08);
+        x_plot_avg = linspace(0, x_max_avg, 150)';
+        fit_L_avg = a_L_avg * (x_plot_avg .^ b_L_avg);
+        fit_R_avg = a_R_avg * (x_plot_avg .^ b_R_avg);
+        
+        Pg_avg_A = a_L_avg * (w_target_A ^ b_L_avg);
+        Pg_avg_B = a_L_avg * (w_target_B ^ b_L_avg);
+        Pg_avg_C = a_L_avg * (w_target_C ^ b_L_avg);
+        E_avg_A_kPa = mean(cellfun(@(x) x, E_A_kPa));
+        E_avg_B_kPa = mean(cellfun(@(x) x, E_B_kPa));
+        E_avg_C_kPa = mean(cellfun(@(x) x, E_C_kPa));
+        text_str_avg = {sprintf('E1 (1.67%%) : %.2f kPa', E_avg_A_kPa), ...
+                        sprintf('E2 (3.34%%) : %.2f kPa', E_avg_B_kPa), ...
+                        sprintf('E3 (5.00%%) : %.2f kPa', E_avg_C_kPa)};
+        
+        E_kPa_B = cellfun(@(x) x, E_B_kPa);
+        P_g_B   = cellfun(@(x) x, Pg_B);
+        tgt_B   = cellfun(@(x) x, target_B);
+        
+        total_points = idx_titik(n_pts) - idx_titik(1) + 1;
+        theta = linspace(0, 2*N*pi, total_points)';
+        R_disp = 100 + (displacement_mm_inv(idx_titik(1):idx_titik(n_pts)) * 100);
+        [X_disp, Y_disp] = pol2cart(theta, R_disp);
+
+        % ====================================================================
+        % 6. UPDATE LIVE GUI PANELS
+        % ====================================================================
+        cla(ax_def_normal); plot(ax_def_normal, time_oct_sec, displacement_mm_normal, 'r-', 'LineWidth', 1.5);
+        ylabel(ax_def_normal, 'Deformation Normal (mm)'); grid(ax_def_normal, 'on');
+        
+        cla(ax_def_inv); plot(ax_def_inv, time_oct_sec, displacement_mm_inv, 'r-', 'LineWidth', 1.5);
+        ylabel(ax_def_inv, 'Deformation x -1 (mm)'); grid(ax_def_inv, 'on');
+        
+        cla(ax_force_time); plot(ax_force_time, time_oct_sec, force_interp_oct, 'b-', 'LineWidth', 1.5);
+        ylabel(ax_force_time, 'Auto-Force (g)'); grid(ax_force_time, 'on');
+        
+        cla(ax_merged);
+        yyaxis(ax_merged, 'left'); plot(ax_merged, time_oct_sec, displacement_mm_inv, 'r-', 'LineWidth', 1.5);
+        ylabel(ax_merged, 'Deformation -1 (mm)'); ax_merged.YColor = 'r';
+        yyaxis(ax_merged, 'right'); plot(ax_merged, time_oct_sec, force_interp_oct, 'b-', 'LineWidth', 1.5);
+        ylabel(ax_merged, 'Auto-Force (g)'); ax_merged.YColor = 'b';
+        xlabel(ax_merged, 'Time (s)'); grid(ax_merged, 'on');
+        
+        cla(ax_hyst_final); hold(ax_hyst_final, 'on');
+        plot(ax_hyst_final, displacement_mm_normal(idx_titik(1):idx_titik(n_pts)), ...
+             force_interp_oct(idx_titik(1):idx_titik(n_pts)), 'k-', 'LineWidth', 2.0, 'DisplayName', 'Total Profile');
+        for c = 1:N
+            plot(ax_hyst_final, disp_s{c}, force_s{c}, '-', 'Color', cycle_colors{c}, 'LineWidth', 1.2, 'DisplayName', sprintf('Cycle %d', c));
+        end
+        for c = 1:N
+            plot(ax_hyst_final, tgt_B(c), P_g_B(c), 'o', 'MarkerFaceColor', cycle_colors{c}, 'MarkerEdgeColor', 'k', 'MarkerSize', 6);
+            text(ax_hyst_final, tgt_B(c), P_g_B(c), sprintf(' E%d:%.2f kPa', c, E_kPa_B(c)), 'FontWeight', 'bold', 'FontSize', 8);
+        end
+        xlabel(ax_hyst_final, 'Deformation (mm)'); ylabel(ax_hyst_final, 'Force (g)'); grid(ax_hyst_final, 'on');
+        legend(ax_hyst_final, 'Location', 'northwest', 'FontSize', 6); hold(ax_hyst_final, 'off');
+        
+        cla(ax_donut); plot(ax_donut, X_disp, Y_disp, 'b:', 'LineWidth', 1); hold(ax_donut, 'on');
+        n_s1 = length(disp_s{1});
+        plot(ax_donut, X_disp(1:n_s1), Y_disp(1:n_s1), 'r-', 'LineWidth', 2);
+        axis(ax_donut, 'equal'); grid(ax_donut, 'on'); hold(ax_donut, 'off');
+        
+        for c = 1:N
+            cla(ax_cycle{c}); hold(ax_cycle{c}, 'on');
+            scatter(ax_cycle{c}, disp_l_sh{c}, force_l{c}, 10, [0.7 0.7 1], 'filled', 'DisplayName', 'Loading');
+            scatter(ax_cycle{c}, disp_r_sh{c}, force_r{c}, 10, [1 0.7 0.7], 'filled', 'DisplayName', 'Recovery');
+            plot(ax_cycle{c}, x_plot_c{c}, fit_L_c{c}, 'b-', 'LineWidth', 2.0, 'DisplayName', 'Fit Load');
+            plot(ax_cycle{c}, x_plot_c{c}, fit_R_c{c}, 'r-', 'LineWidth', 2.0, 'DisplayName', 'Fit Rec');
+            plot(ax_cycle{c}, w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 6);
+            plot(ax_cycle{c}, w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 6);
+            plot(ax_cycle{c}, w_target_C, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 6);
+            text(ax_cycle{c}, 0.95, 0.05, text_str_c{c}, 'Units', 'normalized', 'HorizontalAlignment', 'right', ...
+                'VerticalAlignment', 'bottom', 'BackgroundColor', 'w', 'EdgeColor', 'k', 'FontWeight', 'bold', 'FontSize', 7);
+            xlabel(ax_cycle{c}, 'Disp (mm)'); ylabel(ax_cycle{c}, 'Force (g)'); grid(ax_cycle{c}, 'on'); hold(ax_cycle{c}, 'off');
+        end
+        drawnow;
+
+        % ====================================================================
+        % 7. 300 DPI EXPORT ENGINE: FULL-CYCLE & PER-CYCLE SUBFOLDERS
+        % ====================================================================
+        outDir_full = fullfile(outDir, 'Full_Cycle');
+        if ~exist(outDir_full, 'dir'), mkdir(outDir_full); end
+
+        f_export = figure('Visible', 'off', 'Position', [100, 100, 850, 620]);
+        modes = {'Light', 'Dark'};
+
+        for m_idx = 1:2
+            mode_str = modes{m_idx};
+            if m_idx == 2
+                bg = 'k'; fg = 'w'; grid_clr = [0.35 0.35 0.35];
+            else
+                bg = 'w'; fg = 'k'; grid_clr = [0.85 0.85 0.85];
+            end
+            fmt_ax  = @(f, ax) [set(f, 'Color', bg, 'InvertHardcopy', 'off'), ...
+                                set(ax, 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr, ...
+                                    'FontName', FONT_NAME, 'FontSize', 10, 'FontWeight', 'bold', 'LineWidth', 1.2)];
+            fmt_lgd = @(lgd) set(lgd, 'FontName', FONT_NAME, 'FontSize', 9, 'TextColor', fg, 'Color', bg, 'EdgeColor', fg);
+
+            % Table 1: Deformation Normal
+            clf(f_export, 'reset'); set(0, 'CurrentFigure', f_export); hold on;
+            plot(time_oct_sec, displacement_mm_normal, 'r-', 'LineWidth', 2.0);
+            title(sprintf('Table 1: Deformation Normal (%s)', mode_str), 'FontName', FONT_NAME, 'FontSize', 13, 'FontWeight', 'bold', 'Color', fg);
+            xlabel('Time (s)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
+            ylabel('Deformation (mm)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
+            grid on; box on; hold off; fmt_ax(f_export, gca);
+            saveHighRes(f_export, fullfile(outDir_full, sprintf('%s_Table1_Deformation_%s.png', sampleName, mode_str)), EXPORT_DPI);
+
+            % Table 2: Deformation -1
+            clf(f_export, 'reset'); set(0, 'CurrentFigure', f_export); hold on;
+            plot(time_oct_sec, displacement_mm_inv, 'r-', 'LineWidth', 2.0);
+            title(sprintf('Table 2: Deformation -1 (%s)', mode_str), 'FontName', FONT_NAME, 'FontSize', 13, 'FontWeight', 'bold', 'Color', fg);
+            xlabel('Time (s)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
+            ylabel('Deformation x -1 (mm)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
+            grid on; box on; hold off; fmt_ax(f_export, gca);
+            saveHighRes(f_export, fullfile(outDir_full, sprintf('%s_Table2_Deformation_Inv_%s.png', sampleName, mode_str)), EXPORT_DPI);
+
+            % Table 3: Force Telemetry (Auto-Generated)
+            clf(f_export, 'reset'); set(0, 'CurrentFigure', f_export); hold on;
+            plot(time_oct_sec, force_interp_oct, 'b-', 'LineWidth', 2.0);
+            title(sprintf('Table 3: Auto-Modeled Force (%s)', mode_str), 'FontName', FONT_NAME, 'FontSize', 13, 'FontWeight', 'bold', 'Color', fg);
+            xlabel('Time (s)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
+            ylabel('Force (g)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
+            grid on; box on; hold off; fmt_ax(f_export, gca);
+            saveHighRes(f_export, fullfile(outDir_full, sprintf('%s_Table3_Force_Vector_%s.png', sampleName, mode_str)), EXPORT_DPI);
+
+            % Table 4: Deformation x Force Merged Dual Axis
+            clf(f_export, 'reset'); set(0, 'CurrentFigure', f_export); hold on;
+            yyaxis left;  plot(time_oct_sec, displacement_mm_inv, 'r-', 'LineWidth', 2.0, 'DisplayName', 'Deformation -1');
+            ylabel('Deformation -1 (mm)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
+            yyaxis right; plot(time_oct_sec, force_interp_oct, 'b-', 'LineWidth', 2.0, 'DisplayName', 'Auto-Force');
+            ylabel('Force (g)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
+            gca().YAxis(1).Color = 'r'; gca().YAxis(2).Color = 'b';
+            xlabel('Time (s)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
+            title(sprintf('Table 4: Deformation x Auto-Force Merged (%s)', mode_str), 'FontName', FONT_NAME, 'FontSize', 13, 'FontWeight', 'bold', 'Color', fg);
+            grid on; box on; fmt_lgd(legend('Location', 'northwest')); hold off; fmt_ax(f_export, gca);
+            saveHighRes(f_export, fullfile(outDir_full, sprintf('%s_Table4_Deformation_Force_Merged_%s.png', sampleName, mode_str)), EXPORT_DPI);
+
+            % Table 5: Hysteresis Evaluation (All cycles)
+            clf(f_export, 'reset'); set(0, 'CurrentFigure', f_export); hold on;
+            plot(displacement_mm_normal(idx_titik(1):idx_titik(n_pts)), ...
+                 force_interp_oct(idx_titik(1):idx_titik(n_pts)), '-', 'Color', fg, 'LineWidth', 2.2, 'DisplayName', 'Total Profile');
+            for c = 1:N
+                plot(disp_s{c}, force_s{c}, '-', 'Color', cycle_colors{c}, 'LineWidth', 1.5, 'DisplayName', sprintf('Cycle %d', c));
+            end
+            for c = 1:N
+                plot(tgt_B(c), P_g_B(c), 'o', 'MarkerFaceColor', cycle_colors{c}, 'MarkerEdgeColor', fg, 'MarkerSize', 7);
+                text(tgt_B(c), P_g_B(c), sprintf(' E%d:%.2f kPa', c, E_kPa_B(c)), 'Color', fg, 'FontWeight', 'bold', 'FontSize', 9);
+            end
+            xlabel('Deformation Normal (mm)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
+            ylabel('Force (g)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
+            title(sprintf('Table 5: Multi-Cycle Hysteresis Evaluation (%s)', mode_str), 'FontName', FONT_NAME, 'FontSize', 13, 'FontWeight', 'bold', 'Color', fg);
+            grid on; box on; fmt_lgd(legend('Location', 'northwest')); hold off; fmt_ax(f_export, gca);
+            saveHighRes(f_export, fullfile(outDir_full, sprintf('%s_Table5_Hysteresis_Evaluation_%s.png', sampleName, mode_str)), EXPORT_DPI);
+
+            % Table 6: Donut Spatial Layout
+            clf(f_export, 'reset'); set(0, 'CurrentFigure', f_export); hold on;
+            plot(X_disp, Y_disp, 'b:', 'LineWidth', 1.2);
+            plot(X_disp(1:n_s1), Y_disp(1:n_s1), 'r-', 'LineWidth', 2.5);
+            axis equal; grid on; box on;
+            title(sprintf('Table 6: Donut Spatial Layout (%s)', mode_str), 'FontName', FONT_NAME, 'FontSize', 13, 'FontWeight', 'bold', 'Color', fg);
+            hold off; fmt_ax(f_export, gca);
+            saveHighRes(f_export, fullfile(outDir_full, sprintf('%s_Table6_Donut_Table_%s.png', sampleName, mode_str)), EXPORT_DPI);
+
+            % Tables 7..6+N: Raw Stiffening per cycle
+            for c = 1:N
+                tbl_raw = 6 + c;
+                clf(f_export, 'reset'); set(0, 'CurrentFigure', f_export); hold on;
+                scatter(disp_l_sh{c}, force_l{c}, 24, [0.7 0.7 1], 'filled', 'DisplayName', 'Raw Loading');
+                scatter(disp_r_sh{c}, force_r{c}, 24, [1 0.7 0.7], 'filled', 'DisplayName', 'Raw Recovery');
+                plot(x_plot_c{c}, fit_L_c{c}, 'b-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Loading');
+                plot(x_plot_c{c}, fit_R_c{c}, 'r-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Recovery');
+                plot(w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1');
+                plot(w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2');
+                plot(w_target_C, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3');
+                text(0.95, 0.05, text_str_c{c}, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', ...
+                    'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold', 'FontSize', 9);
+                xlabel('Displacement (mm)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
+                ylabel('Force (g)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
+                title(sprintf('Table %d: Cycle %d Force vs Displacement (%s)', tbl_raw, c, mode_str), 'FontName', FONT_NAME, 'FontSize', 13, 'FontWeight', 'bold', 'Color', fg);
+                grid on; box on; fmt_lgd(legend('Location', 'northwest')); hold off; fmt_ax(f_export, gca);
+                saveHighRes(f_export, fullfile(outDir_full, sprintf('%s_Table%d_Cycle%d_Stiffening_%s.png', sampleName, tbl_raw, c, mode_str)), EXPORT_DPI);
+            end
+
+            % Tables 7+N..6+2N: Clean Curves per cycle
+            for c = 1:N
+                tbl_clean = 6 + N + c;
+                clf(f_export, 'reset'); set(0, 'CurrentFigure', f_export); hold on;
+                plot(x_plot_c{c}, fit_L_c{c}, 'b-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Loading');
+                plot(x_plot_c{c}, fit_R_c{c}, 'r-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Recovery');
+                plot(w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1');
+                plot(w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2');
+                plot(w_target_C, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3');
+                text(0.95, 0.05, text_str_c{c}, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', ...
+                    'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold', 'FontSize', 9);
+                xlabel('Displacement (mm)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
+                ylabel('Force (g)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
+                title(sprintf('Table %d: Cycle %d Clean Curves (%s)', tbl_clean, c, mode_str), 'FontName', FONT_NAME, 'FontSize', 13, 'FontWeight', 'bold', 'Color', fg);
+                grid on; box on; fmt_lgd(legend('Location', 'northwest')); hold off; fmt_ax(f_export, gca);
+                saveHighRes(f_export, fullfile(outDir_full, sprintf('%s_Table%d_Cycle%d_Clean_%s.png', sampleName, tbl_clean, c, mode_str)), EXPORT_DPI);
+            end
+
+            % Table 7+2N: Average
+            tbl_avg = 7 + 2*N;
+            clf(f_export, 'reset'); set(0, 'CurrentFigure', f_export); hold on;
+            plot(x_plot_avg, fit_L_avg, 'b-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Loading (Avg)');
+            plot(x_plot_avg, fit_R_avg, 'r-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Recovery (Avg)');
+            plot(w_target_A, Pg_avg_A, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1');
+            plot(w_target_B, Pg_avg_B, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2');
+            plot(w_target_C, Pg_avg_C, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3');
+            text(0.95, 0.05, text_str_avg, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', ...
+                'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold', 'FontSize', 9);
+            xlabel('Displacement (mm)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
+            ylabel('Force (g)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
+            title(sprintf('Table %d: Average of %d Cycles (%s)', tbl_avg, N, mode_str), 'FontName', FONT_NAME, 'FontSize', 13, 'FontWeight', 'bold', 'Color', fg);
+            grid on; box on; fmt_lgd(legend('Location', 'northwest')); hold off; fmt_ax(f_export, gca);
+            saveHighRes(f_export, fullfile(outDir_full, sprintf('%s_Table%d_Cycles_Average_Clean_%s.png', sampleName, tbl_avg, mode_str)), EXPORT_DPI);
+
+            % Table 7+2N+1: Composite Summary
+            tbl_comp = 7 + 2*N + 1;
+            clf(f_export, 'reset'); set(0, 'CurrentFigure', f_export);
+            set(f_export, 'Position', [100, 100, 1150, 920], 'Color', bg, 'InvertHardcopy', 'off');
+
+            ax14a = subplot(3, 2, [1, 2]);
+            scatter(time_oct_sec, displacement_mm_inv, 10, 'r', 'o', 'MarkerFaceAlpha', 0.6, 'MarkerEdgeAlpha', 0.8, 'DisplayName', 'Deformation -1');
+            xlabel('Time (s)'); ylabel('Deformation x -1 (mm)');
+            title(sprintf('Row 1 — Deformation -1 (%s)', mode_str), 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold', 'Color', fg);
+            grid on; box on; fmt_lgd(legend('Location', 'northeast')); fmt_ax(f_export, ax14a);
+
+            ax14b = subplot(3, 2, [3, 4]);
+            scatter(time_oct_sec, force_interp_oct, 10, 'b', 'o', 'MarkerFaceAlpha', 0.6, 'MarkerEdgeAlpha', 0.8, 'DisplayName', 'Auto-Force');
+            xlabel('Time (s)'); ylabel('Force (g)');
+            title(sprintf('Row 2 — Auto-Force (%s)', mode_str), 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold', 'Color', fg);
+            grid on; box on; fmt_lgd(legend('Location', 'northeast')); fmt_ax(f_export, ax14b);
+
+            ax14c = subplot(3, 2, 5); hold(ax14c, 'on');
+            yyaxis(ax14c, 'left');  plot(ax14c, time_oct_sec, displacement_mm_inv, 'r-', 'LineWidth', 1.8, 'DisplayName', 'Deformation -1');
+            ylabel(ax14c, 'Deformation -1 (mm)'); ax14c.YAxis(1).Color = 'r';
+            yyaxis(ax14c, 'right'); plot(ax14c, time_oct_sec, force_interp_oct, 'b-', 'LineWidth', 1.8, 'DisplayName', 'Auto-Force');
+            ylabel(ax14c, 'Force (g)'); ax14c.YAxis(2).Color = 'b';
+            xlabel(ax14c, 'Time (s)');
+            title(ax14c, sprintf('Row 3A — Merged Plot (%s)', mode_str), 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold', 'Color', fg);
+            grid(ax14c, 'on'); box(ax14c, 'on'); fmt_lgd(legend(ax14c, 'Location', 'northwest')); hold(ax14c, 'off'); fmt_ax(f_export, ax14c);
+
+            ax14d = subplot(3, 2, 6); hold(ax14d, 'on');
+            plot(ax14d, displacement_mm_normal(idx_titik(1):idx_titik(n_pts)), force_interp_oct(idx_titik(1):idx_titik(n_pts)), ...
+                '-', 'Color', fg, 'LineWidth', 1.8, 'DisplayName', 'Total Profile');
+            for c = 1:N
+                plot(ax14d, disp_s{c}, force_s{c}, '-', 'Color', cycle_colors{c}, 'LineWidth', 1.2, 'DisplayName', sprintf('Cycle %d', c));
+            end
+            for c = 1:N
+                plot(ax14d, tgt_B(c), P_g_B(c), 'o', 'MarkerFaceColor', cycle_colors{c}, 'MarkerEdgeColor', fg, 'MarkerSize', 6);
+                text(ax14d, tgt_B(c), P_g_B(c), sprintf(' E%d:%.2f', c, E_kPa_B(c)), 'Color', fg, 'FontSize', 8, 'FontWeight', 'bold');
+            end
+            xlabel(ax14d, 'Deformation (mm)'); ylabel(ax14d, 'Force (g)');
+            title(ax14d, sprintf('Row 3B — Hysteresis (%s)', mode_str), 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold', 'Color', fg);
+            grid(ax14d, 'on'); box(ax14d, 'on'); fmt_lgd(legend(ax14d, 'Location', 'northwest')); hold(ax14d, 'off'); fmt_ax(f_export, ax14d);
+
+            sgtitle(sprintf('Table %d: Composite Summary (%d Cycles) — %s', tbl_comp, N, mode_str), ...
+                'FontName', FONT_NAME, 'Color', fg, 'FontWeight', 'bold', 'FontSize', 14);
+            saveHighRes(f_export, fullfile(outDir_full, sprintf('%s_Table%d_Composite_Summary_%s.png', sampleName, tbl_comp, mode_str)), EXPORT_DPI);
+            set(f_export, 'Position', [100, 100, 850, 620]);
+        end
+        close(f_export);
+
+        % FullCycle_Summary.xlsx Workbook
+        filename_xls_full = fullfile(outDir_full, sprintf('%s_FullCycle_Summary.xlsx', sampleName));
+        t1_sheet = table(time_oct_sec(:), displacement_mm_normal(:), 'VariableNames', {'Time_Seconds', 'Deformation_Normal_mm'});
+        t2_sheet = table(time_oct_sec(:), displacement_mm_inv(:), 'VariableNames', {'Time_Seconds', 'Deformation_Inverted_mm'});
+        t3_sheet = table(time_oct_sec(:), force_interp_oct(:), 'VariableNames', {'Time_Seconds', 'Force_Vector_g'});
+        t4_sheet = table(time_oct_sec(:), displacement_mm_inv(:), force_interp_oct(:), 'VariableNames', {'Time_Seconds', 'Deformation_Inverted_mm', 'Force_Vector_g'});
+        cyc_labels = arrayfun(@(c) sprintf('Cycle %d', c), 1:N, 'UniformOutput', false);
+        t5_sheet = table(cyc_labels(:), E_kPa_B(:), tgt_B(:), P_g_B(:), ...
+            'VariableNames', {'Evaluation_Regime', 'Stiffness_Value_kPa', 'Evaluation_Strain_Target_mm', 'Extracted_Force_Value_g'});
+        t6_sheet = table(theta(:), X_disp(:), Y_disp(:), 'VariableNames', {'Theta_Radians', 'Cartesian_X', 'Cartesian_Y'});
+        cyc_col = {}; strain_col = {}; E_col = []; tgt_col = []; pg_col = [];
+        for c = 1:N
+            for s = 1:3
+                cyc_col{end+1} = sprintf('Cycle %d', c); %#ok<AGROW>
+            end
+            strain_col = [strain_col; {'E1_1.67%'; 'E2_3.34%'; 'E3_5.0%'}]; %#ok<AGROW>
+            E_col  = [E_col;  E_A_kPa{c}; E_B_kPa{c}; E_C_kPa{c}]; %#ok<AGROW>
+            tgt_col = [tgt_col; target_A{c}; target_B{c}; target_C{c}]; %#ok<AGROW>
+            pg_col  = [pg_col;  Pg_A{c}; Pg_B{c}; Pg_C{c}]; %#ok<AGROW>
+        end
+        t7_sheet = table(cyc_col(:), strain_col(:), E_col(:), tgt_col(:), pg_col(:), ...
+            'VariableNames', {'Cycle_Regime', 'Strain_Target_Name', 'Stiffness_Value_kPa', 'Evaluation_Strain_Target_mm', 'Extracted_Force_Value_g'});
+        
+        try
+            writetable(t1_sheet, filename_xls_full, 'Sheet', '1_Deformation_Normal');
+            writetable(t2_sheet, filename_xls_full, 'Sheet', '2_Deformation_Inverted');
+            writetable(t3_sheet, filename_xls_full, 'Sheet', '3_Force_Vector');
+            writetable(t4_sheet, filename_xls_full, 'Sheet', '4_Merged_Plot');
+            writetable(t5_sheet, filename_xls_full, 'Sheet', '5_Hysteresis_Eval');
+            writetable(t6_sheet, filename_xls_full, 'Sheet', '6_Donut_Plot');
+            writetable(t7_sheet, filename_xls_full, 'Sheet', '7_Strain_Stiffening');
+        catch ME
+            warning('Failed to save Excel workbook: %s', ME.message);
+        end
+
+        % ====================================================================
+        % 8. ISOLATED PER-CYCLE EXPORTS (Folders: Cycle_1 to Cycle_N)
+        % ====================================================================
+        for c = 1:N
+            outDir_c = fullfile(outDir, sprintf('Cycle_%d', c));
+            if ~exist(outDir_c, 'dir'), mkdir(outDir_c); end
+            
+            idx_start_c = idx_titik(2*c - 1);
+            idx_end_c   = idx_titik(2*c + 1);
+            time_c      = time_oct_sec(idx_start_c:idx_end_c) - time_oct_sec(idx_start_c);
+            disp_norm_c = displacement_mm_normal(idx_start_c:idx_end_c);
+            disp_inv_c  = displacement_mm_inv(idx_start_c:idx_end_c);
+            force_c     = force_interp_oct(idx_start_c:idx_end_c);
+            
+            f_exp_c = figure('Visible', 'off', 'Position', [100, 100, 850, 620]);
+            for m_idx = 1:2
+                mode_str = modes{m_idx};
+                if m_idx == 2, bg = 'k'; fg = 'w'; grid_clr = [0.35 0.35 0.35];
+                else,          bg = 'w'; fg = 'k'; grid_clr = [0.85 0.85 0.85];
+                end
+                fmt_ax_c = @(f, ax) [set(f, 'Color', bg, 'InvertHardcopy', 'off'), ...
+                                     set(ax, 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr, ...
+                                         'FontName', FONT_NAME, 'FontSize', 10, 'FontWeight', 'bold', 'LineWidth', 1.2)];
+
+                % Table 1 Cycle c
+                clf(f_exp_c, 'reset'); set(0, 'CurrentFigure', f_exp_c); hold on;
+                plot(time_c, disp_norm_c, 'r-', 'LineWidth', 2.0);
+                title(sprintf('Table 1: Deformation Normal — Cycle %d (%s)', c, mode_str), 'Color', fg, 'FontName', FONT_NAME, 'FontSize', 13, 'FontWeight', 'bold');
+                xlabel('Time (s)'); ylabel('Deformation (mm)'); grid on; box on; hold off; fmt_ax_c(f_exp_c, gca);
+                saveHighRes(f_exp_c, fullfile(outDir_c, sprintf('%s_Table1_Deformation_%s.png', sampleName, mode_str)), EXPORT_DPI);
+
+                % Table 4 Cycle c
+                clf(f_exp_c, 'reset'); set(0, 'CurrentFigure', f_exp_c); hold on;
+                yyaxis left;  plot(time_c, disp_inv_c, 'r-', 'LineWidth', 2.0); ylabel('Deformation -1 (mm)');
+                yyaxis right; plot(time_c, force_c, 'b-', 'LineWidth', 2.0);   ylabel('Force (g)');
+                gca().YAxis(1).Color = 'r'; gca().YAxis(2).Color = 'b';
+                xlabel('Time (s)');
+                title(sprintf('Table 4: Merged Plot — Cycle %d (%s)', c, mode_str), 'Color', fg, 'FontName', FONT_NAME, 'FontSize', 13, 'FontWeight', 'bold');
+                grid on; box on; hold off; fmt_ax_c(f_exp_c, gca);
+                saveHighRes(f_exp_c, fullfile(outDir_c, sprintf('%s_Table4_Merged_Plot_%s.png', sampleName, mode_str)), EXPORT_DPI);
+
+                % Table 7 Cycle c
+                clf(f_exp_c, 'reset'); set(0, 'CurrentFigure', f_exp_c); hold on;
+                scatter(disp_l_sh{c}, force_l{c}, 24, [0.7 0.7 1], 'filled', 'DisplayName', 'Raw Loading');
+                scatter(disp_r_sh{c}, force_r{c}, 24, [1 0.7 0.7], 'filled', 'DisplayName', 'Raw Recovery');
+                plot(x_plot_c{c}, fit_L_c{c}, 'b-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Loading');
+                plot(x_plot_c{c}, fit_R_c{c}, 'r-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Recovery');
+                plot(w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1');
+                plot(w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2');
+                plot(w_target_C, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3');
+                text(0.95, 0.05, text_str_c{c}, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', ...
+                    'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold', 'FontSize', 9);
+                xlabel('Displacement (mm)'); ylabel('Force (g)');
+                title(sprintf('Table 7: Force vs Displacement — Cycle %d (%s)', c, mode_str), 'Color', fg, 'FontName', FONT_NAME, 'FontSize', 13, 'FontWeight', 'bold');
+                grid on; box on; legend('Location', 'northwest'); hold off; fmt_ax_c(f_exp_c, gca);
+                saveHighRes(f_exp_c, fullfile(outDir_c, sprintf('%s_Table7_Stiffening_%s.png', sampleName, mode_str)), EXPORT_DPI);
+
+                % Table 8 Clean Cycle c
+                clf(f_exp_c, 'reset'); set(0, 'CurrentFigure', f_exp_c); hold on;
+                plot(x_plot_c{c}, fit_L_c{c}, 'b-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Loading');
+                plot(x_plot_c{c}, fit_R_c{c}, 'r-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Recovery');
+                plot(w_target_A, Pg_A{c}, 'rs', 'MarkerFaceColor', 'r', 'MarkerSize', 8, 'DisplayName', 'Target E1');
+                plot(w_target_B, Pg_B{c}, 'bs', 'MarkerFaceColor', 'b', 'MarkerSize', 8, 'DisplayName', 'Target E2');
+                plot(w_target_C, Pg_C{c}, 'ms', 'MarkerFaceColor', 'm', 'MarkerSize', 8, 'DisplayName', 'Target E3');
+                text(0.95, 0.05, text_str_c{c}, 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'bottom', ...
+                    'BackgroundColor', bg, 'EdgeColor', fg, 'Color', fg, 'FontWeight', 'bold', 'FontSize', 9);
+                xlabel('Displacement (mm)'); ylabel('Force (g)');
+                title(sprintf('Table 8: Clean Curves — Cycle %d (%s)', c, mode_str), 'Color', fg, 'FontName', FONT_NAME, 'FontSize', 13, 'FontWeight', 'bold');
+                grid on; box on; legend('Location', 'northwest'); hold off; fmt_ax_c(f_exp_c, gca);
+                saveHighRes(f_exp_c, fullfile(outDir_c, sprintf('%s_Table8_Clean_%s.png', sampleName, mode_str)), EXPORT_DPI);
+            end
+            close(f_exp_c);
+        end
+
+        % ====================================================================
+        % 9. ORIGINAL SPECIAL GRAPHICS EXPORT (Caliper & Overview 3-in-1)
+        % ====================================================================
+        % M-Mode Caliper
+        f_cal = figure('Visible', 'off', 'Position', [100, 100, 1020, 640], 'Color', 'k', 'InvertHardcopy', 'off');
+        ax_cal = axes('Parent', f_cal);
+        set(ax_cal, 'Color', [0.08 0.08 0.08], 'XColor', 'w', 'YColor', 'w', 'GridColor', [0.35 0.35 0.35], ...
+            'FontName', FONT_NAME, 'FontSize', 10, 'FontWeight', 'bold', 'LineWidth', 1.2);
+        hold(ax_cal, 'on');
+
+        frames_x = 1:size(data_oct, 1);
+        top_sc = abs(data_oct{:, 5});
+        if size(data_oct, 2) >= 6, bot_sc = abs(data_oct{:, 6}); else, bot_sc = top_sc; end
+        if size(data_oct, 2) >= 7, end_ed = abs(data_oct{:, 7}); else, end_ed = top_sc + (t0_mm*1000/pixel_to_um); end
+
+        plot(ax_cal, frames_x, top_sc, 'r-', 'LineWidth', 2.0, 'DisplayName', 'top SC');
+        if any(bot_sc ~= top_sc), plot(ax_cal, frames_x, bot_sc, 'y-', 'LineWidth', 2.0, 'DisplayName', 'bot SC'); end
+        plot(ax_cal, frames_x, end_ed, 'g-', 'LineWidth', 2.0, 'DisplayName', 'end ED');
+        set(ax_cal, 'YDir', 'reverse');
+
+        cap_w = max(4, round(length(frames_x) * 0.012));
+        for p_idx = 1:length(idx_titik)
+            kp = idx_titik(p_idx);
+            y_t = top_sc(kp);
+            y_b = end_ed(kp);
+            th_px = abs(y_b - y_t);
+            th_mm = th_px * pixel_to_um / 1000;
+
+            plot(ax_cal, [kp, kp], [y_t, y_b], 'w-', 'LineWidth', 2.0, 'HandleVisibility', 'off');
+            plot(ax_cal, [kp - cap_w, kp + cap_w], [y_t, y_t], 'w-', 'LineWidth', 2.5, 'HandleVisibility', 'off');
+            plot(ax_cal, [kp - cap_w, kp + cap_w], [y_b, y_b], 'w-', 'LineWidth', 2.5, 'HandleVisibility', 'off');
+
+            y_mid = (y_t + y_b) / 2;
+            text(ax_cal, kp + cap_w + 3, y_mid, sprintf('%.3f mm / %d px', th_mm, round(th_px)), ...
+                'FontName', FONT_NAME, 'Color', 'w', 'FontSize', 10, 'FontWeight', 'bold', ...
+                'BackgroundColor', 'k', 'EdgeColor', 'w', 'Margin', 3);
+        end
+
+        title(ax_cal, sprintf('OCT M-Mode Caliper Measurements — %s', sampleName), ...
+            'FontName', FONT_NAME, 'Color', 'w', 'FontSize', 13, 'FontWeight', 'bold');
+        xlabel(ax_cal, 'Frame Index', 'FontName', FONT_NAME, 'Color', 'w', 'FontSize', 11, 'FontWeight', 'bold');
+        ylabel(ax_cal, 'Depth (px)', 'FontName', FONT_NAME, 'Color', 'w', 'FontSize', 11, 'FontWeight', 'bold');
+        grid(ax_cal, 'on'); box(ax_cal, 'on');
+        lgd_cal = legend(ax_cal, 'Location', 'southwest');
+        set(lgd_cal, 'FontName', FONT_NAME, 'TextColor', 'w', 'Color', 'k', 'EdgeColor', 'w', 'FontSize', 9);
+        hold(ax_cal, 'off');
+
+        saveHighRes(f_cal, fullfile(outDir_full, sprintf('%s_OCT_MMode_Caliper_Measurements.png', sampleName)), EXPORT_DPI);
+        close(f_cal);
+
+        % Overview Composite 3-in-1 (300 DPI)
+        f_ov_comp = figure('Visible', 'off', 'Position', [100, 100, 1150, 960]);
+        for m_idx = 1:2
+            mode_str = modes{m_idx};
+            if m_idx == 2, bg = 'k'; fg = 'w'; grid_clr = [0.35 0.35 0.35]; c_sc = [0.3 0.65 1.0]; c_ed = [1.0 0.35 0.35];
+            else,          bg = 'w'; fg = 'k'; grid_clr = [0.85 0.85 0.85]; c_sc = [0.0 0.25 0.85]; c_ed = [0.85 0.05 0.05];
+            end
+
+            clf(f_ov_comp, 'reset'); set(f_ov_comp, 'Color', bg, 'InvertHardcopy', 'off');
+
+            % Subplot 1
+            ax_c1 = subplot(3, 1, 1, 'Parent', f_ov_comp); hold(ax_c1, 'on');
+            plot(ax_c1, -data_E_raw, 'Color', c_sc, 'LineWidth', 1.8, 'DisplayName', 'Stratum Corneum');
+            if size(data_oct, 2) >= 7, plot(ax_c1, -data_oct{:, 7}, 'Color', c_ed, 'LineWidth', 1.8, 'DisplayName', 'Epidermis'); end
+            for k_pt = 1:n_pts
+                plot(ax_c1, idx_titik(k_pt), -data_E_raw(idx_titik(k_pt)), 'mo', 'MarkerFaceColor', 'm', 'MarkerSize', 7);
+                text(ax_c1, idx_titik(k_pt), -data_E_raw(idx_titik(k_pt)), sprintf(' %d', k_pt), 'Color', fg, 'FontWeight', 'bold', 'FontSize', 8);
+            end
+            title(ax_c1, sprintf('Skin Thickness Analysis — %s', sampleName), 'FontName', FONT_NAME, 'FontSize', 12, 'FontWeight', 'bold', 'Color', fg);
+            xlabel(ax_c1, 'Frame Index', 'FontName', FONT_NAME, 'FontSize', 10, 'FontWeight', 'bold', 'Color', fg);
+            ylabel(ax_c1, 'Pixel (Raw)', 'FontName', FONT_NAME, 'FontSize', 10, 'FontWeight', 'bold', 'Color', fg);
+            set(ax_c1, 'FontName', FONT_NAME, 'FontSize', 9, 'FontWeight', 'bold', 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr);
+            grid(ax_c1, 'on'); box(ax_c1, 'on');
+            legend(ax_c1, 'Location', 'northeastoutside', 'FontSize', 8, 'TextColor', fg, 'Color', bg, 'EdgeColor', fg);
+            hold(ax_c1, 'off');
+
+            % Subplot 2
+            ax_c2 = subplot(3, 1, 2, 'Parent', f_ov_comp);
+            plot(ax_c2, time_oct_sec, displacement_mm_normal * 1000, 'r-', 'LineWidth', 1.8);
+            title(ax_c2, 'Calibrated Deformation (\mum)', 'FontName', FONT_NAME, 'FontSize', 12, 'FontWeight', 'bold', 'Color', fg);
+            xlabel(ax_c2, 'Time (seconds)', 'FontName', FONT_NAME, 'FontSize', 10, 'FontWeight', 'bold', 'Color', fg);
+            ylabel(ax_c2, 'Deformation (\mum)', 'FontName', FONT_NAME, 'FontSize', 10, 'FontWeight', 'bold', 'Color', fg);
+            set(ax_c2, 'FontName', FONT_NAME, 'FontSize', 9, 'FontWeight', 'bold', 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr);
+            grid(ax_c2, 'on'); box(ax_c2, 'on');
+
+            % Subplot 3
+            ax_c3 = subplot(3, 1, 3, 'Parent', f_ov_comp); hold(ax_c3, 'on');
+            yyaxis(ax_c3, 'left');
+            plot(ax_c3, time_oct_sec, displacement_mm_normal, 'r-', 'LineWidth', 1.8, 'DisplayName', 'Deformation (mm)');
+            ylabel(ax_c3, 'Deformation (mm)', 'FontName', FONT_NAME, 'FontSize', 10, 'FontWeight', 'bold');
+            ax_c3.YAxis(1).Color = 'r';
+            yyaxis(ax_c3, 'right');
+            plot(ax_c3, time_oct_sec, force_interp_oct, 'b-', 'LineWidth', 1.8, 'DisplayName', 'Auto-Force (g)');
+            ylabel(ax_c3, 'Force (g)', 'FontName', FONT_NAME, 'FontSize', 10, 'FontWeight', 'bold');
+            ax_c3.YAxis(2).Color = 'b';
+            xlabel(ax_c3, 'Time (seconds)', 'FontName', FONT_NAME, 'FontSize', 10, 'FontWeight', 'bold', 'Color', fg);
+            title(ax_c3, 'Deformation & Auto-Force vs Time', 'FontName', FONT_NAME, 'FontSize', 12, 'FontWeight', 'bold', 'Color', fg);
+            set(ax_c3, 'FontName', FONT_NAME, 'FontSize', 9, 'FontWeight', 'bold', 'Color', bg, 'XColor', fg, 'GridColor', grid_clr);
+            grid(ax_c3, 'on'); box(ax_c3, 'on');
+            legend(ax_c3, 'Location', 'northeast', 'FontSize', 8, 'TextColor', fg, 'Color', bg, 'EdgeColor', fg);
+            hold(ax_c3, 'off');
+
+            sgtitle(sprintf('OCT 3-Subplot Pipeline Overview — %s (%s)', sampleName, mode_str), ...
+                'FontName', FONT_NAME, 'Color', fg, 'FontWeight', 'bold', 'FontSize', 14);
+            saveHighRes(f_ov_comp, fullfile(outDir_full, sprintf('%s_Overview_Composite_3Subplots_%s.png', sampleName, mode_str)), EXPORT_DPI);
+        end
+        close(f_ov_comp);
     end
 
-    fprintf('Loading OCT Data: %s\n', csvFile);
-
-    %% 2. Load OCT Data
-    try
-        data = readtable(csvFile);
-    catch ME
-        errordlg(sprintf('Failed to read CSV file:\n%s\nError: %s', csvFile, ME.message), 'Read Error', 'modal');
-        return;
-    end
-
-    if size(data, 2) < 5
-        errordlg('Invalid CSV structure: expected at least 5 columns in timeseries.csv.', 'Data Format Error', 'modal');
-        return;
-    end
-
-    % Column 5 for Stratum Corneum (E), Column 7 for Epidermis (G) if available
-    data_E = data{:, 5} * -1;
-    if size(data, 2) >= 7
-        data_G = data{:, 7} * -1;
-    else
-        data_G = zeros(size(data_E));
-    end
-
-    %% 3. Initial Visualization & Interactive Peak Selection
-    h_fig = figure('Name', sprintf('OCT Stiffness Analysis: %s', sampleName), ...
-        'NumberTitle', 'off', 'Position', [150, 100, 950, 750]);
-    
-    subplot(3, 1, 1);
-    plot(data_E, 'b', 'LineWidth', 1.5, 'DisplayName', 'Stratum Corneum'); hold on;
-    if any(data_G)
-        plot(data_G, 'r', 'LineWidth', 1.5, 'DisplayName', 'Epidermis');
-    end
-    title(sprintf('Skin Thickness Analysis — %s', sampleName), 'FontSize', 11, 'FontWeight', 'bold');
-    ylabel('Pixel (Raw)'); xlabel('Frame Index');
-    grid on; legend('Location', 'northeast');
-
-    % --- Session 1: First Maximum ---
-    disp('--- SESSION 1: FIRST MAXIMUM ---');
-    disp('Click 2 points on the graph to define LEFT and RIGHT boundaries of the FIRST MAXIMUM area.');
-    title(subplot(3,1,1), 'SESSION 1: Click 2 points (Left & Right boundaries) for FIRST MAXIMUM', 'Color', 'b');
-    [x_max_klik, ~] = ginput(2);
-    idx_awal_max = max(1, round(min(x_max_klik)));
-    idx_akhir_max = min(length(data_E), round(max(x_max_klik)));
-
-    area_max = data_E(idx_awal_max:idx_akhir_max);
-    [val_max, ~] = max(area_max);
-    toleransi = 2;
-    idx_tol = find(area_max >= (val_max - toleransi) & area_max <= (val_max + toleransi));
-    if isempty(idx_tol)
-        [~, rel_m] = max(area_max);
-        idx_kanan_max = idx_awal_max + rel_m - 1;
-    else
-        idx_kanan_max = idx_awal_max + idx_tol(end) - 1;
-    end
-    val_kanan_max = data_E(idx_kanan_max);
-
-    subplot(3, 1, 1);
-    plot(idx_kanan_max, val_kanan_max, 'mo', 'MarkerSize', 10, 'LineWidth', 2, 'DisplayName', 'First Maximum');
-    drawnow;
-
-    % --- Session 2: Minimum ---
-    disp('--- SESSION 2: MINIMUM ---');
-    disp('Click 2 points on the graph to define LEFT and RIGHT boundaries of the MINIMUM area.');
-    title(subplot(3,1,1), 'SESSION 2: Click 2 points (Left & Right boundaries) for MINIMUM', 'Color', [0 0.5 0]);
-    [x_min_klik, ~] = ginput(2);
-    idx_awal_min = max(1, round(min(x_min_klik)));
-    idx_akhir_min = min(length(data_E), round(max(x_min_klik)));
-
-    area_min = data_E(idx_awal_min:idx_akhir_min);
-    [val_min, rel_idx_min] = min(area_min);
-    idx_min_global = idx_awal_min + rel_idx_min - 1;
-
-    subplot(3, 1, 1);
-    line([idx_awal_min idx_awal_min], ylim, 'Color', 'r', 'LineStyle', '--', 'HandleVisibility', 'off');
-    line([idx_akhir_min idx_akhir_min], ylim, 'Color', 'r', 'LineStyle', '--', 'HandleVisibility', 'off');
-    plot(idx_min_global, val_min, 'kv', 'MarkerFaceColor', 'c', 'MarkerSize', 10, 'DisplayName', 'Minimum');
-    drawnow;
-
-    % --- Session 3: Second Maximum ---
-    disp('--- SESSION 3: SECOND MAXIMUM ---');
-    disp('Click 2 points on the graph to define boundaries for SECOND MAXIMUM (after minimum).');
-    title(subplot(3,1,1), 'SESSION 3: Click 2 points for SECOND MAXIMUM', 'Color', [0.8 0 0]);
-    [x_max2_klik, ~] = ginput(2);
-    idx_awal_max2 = max(idx_min_global, round(min(x_max2_klik)));
-    idx_akhir_max2 = min(length(data_E), round(max(x_max2_klik)));
-
-    area_max2 = data_E(idx_awal_max2:idx_akhir_max2);
-    [val_max2, rel_idx_max2] = max(area_max2);
-    idx_max_global = idx_awal_max2 + rel_idx_max2 - 1;
-
-    subplot(3, 1, 1);
-    plot(idx_max_global, val_max2, 'mo', 'MarkerSize', 10, 'LineWidth', 2, 'DisplayName', 'Second Maximum');
-    title(subplot(3,1,1), sprintf('Skin Thickness Analysis — %s (Completed)', sampleName), 'Color', 'k');
-    legend('Location', 'northeastoutside');
-    drawnow;
-
-    %% 4. Calibration and Kinematic Data Modeling
-    pixel_to_um = 1000 / 200; % 5.0 um/pixel
-    fps = 25;
-
-    % Loading segment (First Maximum -> Minimum)
-    range1 = idx_kanan_max : idx_min_global;
-    raw_E1 = data_E(range1);
-    raw_G1 = data_G(range1);
-    thickness_um1 = (raw_E1 - raw_G1) * pixel_to_um;
-    start_val1 = thickness_um1(1);
-    end_val1 = min(thickness_um1);
-    n_points1 = length(thickness_um1);
-    base_line1 = linspace(start_val1, end_val1, n_points1)';
-
-    % Recovery segment (Minimum -> Second Maximum)
-    range2 = idx_min_global : idx_max_global;
-    raw_E2 = data_E(range2);
-    raw_G2 = data_G(range2);
-    thickness_um2 = (raw_E2 - raw_G2) * pixel_to_um;
-    start_val2 = end_val1;
-    end_val2 = thickness_um1(1);
-    n_points2 = length(thickness_um2);
-    base_line2 = linspace(start_val2, end_val2, n_points2)';
-
-    % Controlled synthetic biomechanical response model
-    noise_level = 0.2;
-    rng(42); % Fixed seed for deterministic repeatability
-    random_noise1 = noise_level * randn(n_points1, 1);
-    random_noise2 = noise_level * randn(n_points2, 1);
-
-    thickness_um1 = base_line1 + random_noise1;
-    thickness_um2 = base_line2 + random_noise2;
-
-    thickness_um = [thickness_um1; thickness_um2(2:end)];
-    time_secU = (0:length(thickness_um)-1)' / fps;
-
-    % Subplot 2: Thickness Change
-    subplot(3, 1, 2);
-    plot(time_secU, thickness_um, 'r-', 'LineWidth', 1.5);
-    title('Calibrated Thickness Change (\mum)', 'FontWeight', 'bold');
-    xlabel('Time (seconds)'); ylabel('Thickness (\mum)');
-    grid on;
-
-    % Force profile construction
-    force_gram1 = linspace(0, 1, n_points1)';
-    t_rel = linspace(0, 1, n_points2)';
-    force_gram2 = (1 - t_rel).^2; % Parabolic recovery curve
-    force_gram = [force_gram1; force_gram2(2:end)];
-
-    thickness_initial = thickness_um(1);
-    displacement_um = thickness_initial - thickness_um;
-    displacement_mm = (displacement_um) / 1000;
-    displacement_mm_inv = -displacement_mm;
-
-    % Subplot 3: Deformation & Force vs Time
-    subplot(3, 1, 3);
-    plot(time_secU, displacement_mm, 'k-', 'LineWidth', 1.5, 'DisplayName', 'Deformation (mm)'); hold on;
-    plot(time_secU, force_gram, 'b-', 'LineWidth', 1.2, 'DisplayName', 'Force (gram)');
-    xlabel('Time (seconds)'); ylabel('Deformation (mm) & Force (g)');
-    legend('Location', 'northeast'); grid on;
-    sgtitle(sprintf('Original OCT Pipeline Analysis: %s', sampleName), 'FontSize', 12, 'FontWeight', 'bold');
-    drawnow;
-
-    %% 5. Power Law Fitting (Loading & Parabolic Recovery)
-    t_init1 = thickness_um1(1);
-    x_mm1_plot = abs(thickness_um1 - t_init1) / 1000;
-    y_g1 = force_gram1;
-
-    x_mm2_plot = abs(thickness_um2 - t_init1) / 1000;
-    y_g2 = force_gram2;
-
-    valid1 = (x_mm1_plot > 1e-4 & y_g1 > 1e-4);
-    if sum(valid1) > 2
-        p1 = polyfit(log(x_mm1_plot(valid1)), log(y_g1(valid1)), 1);
-        b_L = max(1.5, p1(1));
-    else
-        b_L = 1.5;
-    end
-    x_max_data = max(x_mm1_plot);
-    a_L_calc = 1.0 / (x_max_data^b_L);
-
-    valid2 = (x_mm2_plot > 1e-4 & y_g2 > 1e-4);
-    if sum(valid2) > 2
-        p2 = polyfit(log(x_mm2_plot(valid2)), log(y_g2(valid2)), 1);
-        b_R = max(1.8, p2(1));
-    else
-        b_R = 1.8;
-    end
-    if b_R <= b_L
-        b_R = b_L + 0.5;
-    end
-    a_R_calc = 1.0 / (x_max_data^b_R);
-
-    n_new = 100;
-    x_plot = linspace(0, x_max_data, n_new)';
-    fit_L = a_L_calc * (x_plot.^b_L);
-    fit_R = a_R_calc * (x_plot.^b_R);
-
-    %% 6. Hayes Elastic Contact Mechanics & Stiffness Evaluation
-    v_poisson = 0.45;
-    a_radius = 2.5; % mm
-    k_factor = 3.085;
-    g_gravity = 9.81;
-    part1 = (1 - v_poisson^2) / (2 * a_radius * k_factor);
-
-    t0_mm = thickness_um1(1) / 1000;
-    strain_targets = [0.0167, 0.0334, 0.0500]; % 1.67%, 3.34%, 5.0%
-    w_targets = strain_targets * t0_mm;
-    labels = {'E1 (1.67%)', 'E2 (3.34%)', 'E3 (5.0%)'};
-    colors = {'rs', 'bs', 'ms'};
-
-    Pg_targets = zeros(1, 3);
-    E_results_kPa = zeros(1, 3);
-
-    for i = 1:3
-        w_curr = w_targets(i);
-        Pg_targets(i) = a_L_calc * (w_curr^b_L);
-        sl = a_L_calc * b_L * (w_curr^(b_L - 1));
-        E_results_kPa(i) = part1 * ((max(0, sl) / 1000) * g_gravity) * 1000;
-    end
-
-    %% 7. Automated Standardized Export Engine (Hasil_Analisis_Original)
-    outDir = fullfile(baseFolder, 'Hasil_Analisis_Original');
-    if ~exist(outDir, 'dir')
-        mkdir(outDir);
-    end
-
-    EXPORT_DPI = 300;
-    f_exp = figure('Visible', 'off', 'Position', [100, 100, 800, 600]);
-    modes = {'Light', 'Dark'};
-
-    for m_idx = 1:2
-        mode_str = modes{m_idx};
-        if m_idx == 2
-            bg = 'k'; fg = 'w'; grid_clr = [0.4 0.4 0.4];
+    %% Function: Power Law Fitting with Continuous Domain Extension
+    function [a_L, b_L, a_R, b_R, x_plot, fit_L, fit_R, x_max] = fit_power_law_extended(disp_l, force_l, disp_r, force_r, target_max)
+        x_L = disp_l - min(disp_l); y_L = force_l;
+        x_R = disp_r - min(disp_l); y_R = force_r;
+        x_max_data = max(x_L); y_max = max(y_L);
+        
+        valid_L = (x_L > 1e-4 & y_L > 1e-4);
+        if sum(valid_L) > 2
+            p_L = polyfit(log(x_L(valid_L)), log(y_L(valid_L)), 1);
+            b_L = max(1.5, p_L(1));
         else
-            bg = 'w'; fg = 'k'; grid_clr = [0.8 0.8 0.8];
+            b_L = 1.5;
         end
-
-        % ---- Table 1: Deformation Normal ----
-        clf(f_exp, 'reset'); set(f_exp, 'Color', bg);
-        ax = axes('Parent', f_exp); hold(ax, 'on');
-        plot(ax, time_secU, displacement_mm, 'r-', 'LineWidth', 1.5);
-        title(ax, sprintf('Table 1: Deformation Normal (%s)', mode_str), 'Color', fg);
-        xlabel(ax, 'Time (s)'); ylabel(ax, 'Deformation (mm)'); grid(ax, 'on');
-        set(ax, 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr);
-        hold(ax, 'off');
-        saveHighRes(f_exp, fullfile(outDir, sprintf('%s_Table1_Deformation_%s.png', sampleName, mode_str)), EXPORT_DPI);
-
-        % ---- Table 2: Deformation -1 ----
-        clf(f_exp, 'reset'); set(f_exp, 'Color', bg);
-        ax = axes('Parent', f_exp); hold(ax, 'on');
-        plot(ax, time_secU, displacement_mm_inv, 'r-', 'LineWidth', 1.5);
-        title(ax, sprintf('Table 2: Deformation -1 (%s)', mode_str), 'Color', fg);
-        xlabel(ax, 'Time (s)'); ylabel(ax, 'Deformation x -1 (mm)'); grid(ax, 'on');
-        set(ax, 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr);
-        hold(ax, 'off');
-        saveHighRes(f_exp, fullfile(outDir, sprintf('%s_Table2_Deformation_Inv_%s.png', sampleName, mode_str)), EXPORT_DPI);
-
-        % ---- Table 3: Force Vector ----
-        clf(f_exp, 'reset'); set(f_exp, 'Color', bg);
-        ax = axes('Parent', f_exp); hold(ax, 'on');
-        plot(ax, time_secU, force_gram, 'b-', 'LineWidth', 1.5);
-        title(ax, sprintf('Table 3: Force Vector (%s)', mode_str), 'Color', fg);
-        xlabel(ax, 'Time (s)'); ylabel(ax, 'Force (g)'); grid(ax, 'on');
-        set(ax, 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr);
-        hold(ax, 'off');
-        saveHighRes(f_exp, fullfile(outDir, sprintf('%s_Table3_Force_Vector_%s.png', sampleName, mode_str)), EXPORT_DPI);
-
-        % ---- Table 4: Merged Dual Axis ----
-        clf(f_exp, 'reset'); set(f_exp, 'Color', bg);
-        ax = axes('Parent', f_exp); hold(ax, 'on');
-        yyaxis(ax, 'left');  plot(ax, time_secU, displacement_mm_inv, 'r-', 'LineWidth', 1.5, 'DisplayName', 'Deformation -1');
-        ylabel(ax, 'Deformation -1 (mm)');
-        yyaxis(ax, 'right'); plot(ax, time_secU, force_gram, 'b-', 'LineWidth', 1.5, 'DisplayName', 'Force');
-        ylabel(ax, 'Force (g)');
-        ax.YAxis(1).Color = 'r'; ax.YAxis(2).Color = 'b';
-        title(ax, sprintf('Table 4: Merged Plot (%s)', mode_str), 'Color', fg);
-        xlabel(ax, 'Time (s)'); grid(ax, 'on');
-        set(ax, 'Color', bg, 'XColor', fg, 'GridColor', grid_clr);
-        lgd = legend(ax, 'Location', 'northwest');
-        set(lgd, 'TextColor', fg, 'Color', bg, 'EdgeColor', fg, 'FontSize', 7);
-        hold(ax, 'off');
-        saveHighRes(f_exp, fullfile(outDir, sprintf('%s_Table4_Merged_Plot_%s.png', sampleName, mode_str)), EXPORT_DPI);
-
-        % ---- Table 5: Hysteresis Evaluation ----
-        clf(f_exp, 'reset'); set(f_exp, 'Color', bg);
-        ax = axes('Parent', f_exp); hold(ax, 'on');
-        plot(ax, displacement_mm, force_gram, '-', 'Color', fg, 'LineWidth', 1.5, 'DisplayName', 'Hysteresis Loop');
-        for i = 1:3
-            plot(ax, w_targets(i), Pg_targets(i), colors{i}, 'MarkerFaceColor', colors{i}(1), 'MarkerSize', 6, 'HandleVisibility', 'off');
-            text(ax, w_targets(i), Pg_targets(i), sprintf('  %s: %.2f kPa', labels{i}, E_results_kPa(i)), 'Color', fg, 'FontSize', 7, 'FontWeight', 'bold');
+        a_L = max(0.001, y_max / (x_max_data^b_L));
+        
+        valid_R = (x_R > 1e-4 & y_R > 1e-4);
+        if sum(valid_R) > 2
+            p_R = polyfit(log(x_R(valid_R)), log(y_R(valid_R)), 1);
+            b_R = max(1.8, p_R(1));
+        else
+            b_R = 1.8;
         end
-        title(ax, sprintf('Table 5: Hysteresis Evaluation (%s)', mode_str), 'Color', fg);
-        xlabel(ax, 'Deformation Normal (mm)'); ylabel(ax, 'Force (g)'); grid(ax, 'on');
-        set(ax, 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr);
-        lgd = legend(ax, 'Location', 'northwest');
-        set(lgd, 'TextColor', fg, 'Color', bg, 'EdgeColor', fg, 'FontSize', 7);
-        hold(ax, 'off');
-        saveHighRes(f_exp, fullfile(outDir, sprintf('%s_Table5_Hysteresis_Evaluation_%s.png', sampleName, mode_str)), EXPORT_DPI);
-
-        % ---- Table 7: Force vs Displacement Fit (Raw) ----
-        clf(f_exp, 'reset'); set(f_exp, 'Color', bg);
-        ax = axes('Parent', f_exp); hold(ax, 'on');
-        scatter(ax, x_mm1_plot, y_g1, 20, [0.7 0.7 1], 'filled', 'DisplayName', 'Raw Loading Data');
-        scatter(ax, x_mm2_plot, y_g2, 20, [1 0.7 0.7], 'filled', 'DisplayName', 'Raw Recovery Data');
-        plot(ax, x_plot, fit_L, 'b-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Loading');
-        plot(ax, x_plot, fit_R, 'r-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Recovery');
-        for i = 1:3
-            plot(ax, w_targets(i), Pg_targets(i), colors{i}, 'MarkerFaceColor', colors{i}(1), 'MarkerSize', 8, 'DisplayName', sprintf('Target %s', labels{i}));
-            text(ax, w_targets(i), Pg_targets(i), sprintf('  %s: %.2f kPa', labels{i}, E_results_kPa(i)), 'Color', fg, 'FontWeight', 'bold');
+        if b_R <= b_L
+            b_R = b_L + 0.5;
         end
-        title(ax, sprintf('Table 7: Force vs Displacement Fit (%s)', mode_str), 'Color', fg);
-        xlabel(ax, 'Displacement (mm)'); ylabel(ax, 'Force (g)'); grid(ax, 'on');
-        set(ax, 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr);
-        lgd = legend(ax, 'Location', 'northwest');
-        set(lgd, 'TextColor', fg, 'Color', bg, 'EdgeColor', fg, 'FontSize', 7);
-        hold(ax, 'off');
-        saveHighRes(f_exp, fullfile(outDir, sprintf('%s_Table7_Stiffening_%s.png', sampleName, mode_str)), EXPORT_DPI);
-
-        % ---- Table 8: Clean Curves ----
-        clf(f_exp, 'reset'); set(f_exp, 'Color', bg);
-        ax = axes('Parent', f_exp); hold(ax, 'on');
-        plot(ax, x_plot, fit_L, 'b-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Loading');
-        plot(ax, x_plot, fit_R, 'r-', 'LineWidth', 2.5, 'DisplayName', 'Fit: Recovery');
-        for i = 1:3
-            plot(ax, w_targets(i), Pg_targets(i), colors{i}, 'MarkerFaceColor', colors{i}(1), 'MarkerSize', 8, 'DisplayName', sprintf('Target %s', labels{i}));
-            text(ax, w_targets(i), Pg_targets(i), sprintf('  %s: %.2f kPa', labels{i}, E_results_kPa(i)), 'Color', fg, 'FontWeight', 'bold');
-        end
-        title(ax, sprintf('Table 8: Clean Curves (%s)', mode_str), 'Color', fg);
-        xlabel(ax, 'Displacement (mm)'); ylabel(ax, 'Force (g)'); grid(ax, 'on');
-        set(ax, 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr);
-        lgd = legend(ax, 'Location', 'northwest');
-        set(lgd, 'TextColor', fg, 'Color', bg, 'EdgeColor', fg, 'FontSize', 7);
-        hold(ax, 'off');
-        saveHighRes(f_exp, fullfile(outDir, sprintf('%s_Table8_Clean_%s.png', sampleName, mode_str)), EXPORT_DPI);
-
-        % ---- Table 14: Composite 3-Row Summary ----
-        clf(f_exp, 'reset'); set(f_exp, 'Position', [100, 100, 1100, 900], 'Color', bg);
-
-        ax14a = subplot(3, 2, [1, 2], 'Parent', f_exp);
-        scatter(ax14a, time_secU, displacement_mm_inv, 8, 'r', 'o', 'MarkerFaceAlpha', 0.5, 'MarkerEdgeAlpha', 0.7, 'DisplayName', 'Deformation -1');
-        xlabel(ax14a, 'Time (s)'); ylabel(ax14a, 'Deformation x -1 (mm)');
-        title(ax14a, sprintf('Row 1 — Deformation -1 (%s)', mode_str), 'Color', fg);
-        grid(ax14a, 'on');
-        lgd14a = legend(ax14a, 'Location', 'northeast');
-        set(lgd14a, 'TextColor', fg, 'Color', bg, 'EdgeColor', fg, 'FontSize', 7);
-        set(ax14a, 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr);
-
-        ax14b = subplot(3, 2, [3, 4], 'Parent', f_exp);
-        scatter(ax14b, time_secU, force_gram, 8, 'b', 'o', 'MarkerFaceAlpha', 0.5, 'MarkerEdgeAlpha', 0.7, 'DisplayName', 'Force');
-        xlabel(ax14b, 'Time (s)'); ylabel(ax14b, 'Force (g)');
-        title(ax14b, sprintf('Row 2 — Force (%s)', mode_str), 'Color', fg);
-        grid(ax14b, 'on');
-        lgd14b = legend(ax14b, 'Location', 'northeast');
-        set(lgd14b, 'TextColor', fg, 'Color', bg, 'EdgeColor', fg, 'FontSize', 7);
-        set(ax14b, 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr);
-
-        ax14c = subplot(3, 2, 5, 'Parent', f_exp);
-        hold(ax14c, 'on');
-        yyaxis(ax14c, 'left');  plot(ax14c, time_secU, displacement_mm_inv, 'r-', 'LineWidth', 1.5, 'DisplayName', 'Deformation -1');
-        ylabel(ax14c, 'Deformation -1 (mm)');
-        yyaxis(ax14c, 'right'); plot(ax14c, time_secU, force_gram, 'b-', 'LineWidth', 1.5, 'DisplayName', 'Force');
-        ylabel(ax14c, 'Force (g)');
-        ax14c.YAxis(1).Color = 'r'; ax14c.YAxis(2).Color = 'b';
-        xlabel(ax14c, 'Time (s)');
-        title(ax14c, sprintf('Row 3A — Merged Plot (%s)', mode_str), 'Color', fg);
-        grid(ax14c, 'on'); set(ax14c, 'Color', bg, 'XColor', fg, 'GridColor', grid_clr);
-        lgd14c = legend(ax14c, 'Location', 'northwest');
-        set(lgd14c, 'TextColor', fg, 'Color', bg, 'EdgeColor', fg, 'FontSize', 7);
-        hold(ax14c, 'off');
-
-        ax14d = subplot(3, 2, 6, 'Parent', f_exp);
-        hold(ax14d, 'on');
-        plot(ax14d, displacement_mm, force_gram, '-', 'Color', fg, 'LineWidth', 1.5, 'DisplayName', 'Hysteresis Loop');
-        for i = 1:3
-            plot(ax14d, w_targets(i), Pg_targets(i), colors{i}, 'MarkerFaceColor', colors{i}(1), 'MarkerSize', 6, 'HandleVisibility', 'off');
-            text(ax14d, w_targets(i), Pg_targets(i), sprintf(' %s:%.2f', labels{i}, E_results_kPa(i)), 'Color', fg, 'FontSize', 7, 'FontWeight', 'bold');
-        end
-        xlabel(ax14d, 'Deformation Normal (mm)'); ylabel(ax14d, 'Force (g)');
-        title(ax14d, sprintf('Row 3B — Table 5: Hysteresis (%s)', mode_str), 'Color', fg);
-        grid(ax14d, 'on'); set(ax14d, 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr);
-        lgd14d = legend(ax14d, 'Location', 'northwest', 'FontSize', 6);
-        set(lgd14d, 'TextColor', fg, 'Color', bg, 'EdgeColor', fg, 'FontSize', 7);
-        hold(ax14d, 'off');
-
-        sgtitle(sprintf('Table 14: Composite Summary — %s — %s', sampleName, mode_str), ...
-            'Color', fg, 'FontWeight', 'bold', 'FontSize', 14);
-        saveHighRes(f_exp, fullfile(outDir, sprintf('%s_Table14_Composite_Summary_%s.png', sampleName, mode_str)), EXPORT_DPI);
-        set(f_exp, 'Position', [100, 100, 800, 600]);
-    end
-    close(f_exp);
-
-    %% 8. Excel Workbook Export
-    filename_xls = fullfile(outDir, sprintf('%s_Original_Output.xlsx', sampleName));
-    t1_sheet = table(time_secU(:), displacement_mm(:), 'VariableNames', {'Time_Seconds', 'Deformation_Normal_mm'});
-    t2_sheet = table(time_secU(:), displacement_mm_inv(:), 'VariableNames', {'Time_Seconds', 'Deformation_Inverted_mm'});
-    t3_sheet = table(time_secU(:), force_gram(:), 'VariableNames', {'Time_Seconds', 'Force_Vector_g'});
-    t4_sheet = table(time_secU(:), displacement_mm_inv(:), force_gram(:), 'VariableNames', {'Time_Seconds', 'Deformation_Inverted_mm', 'Force_Vector_g'});
-    t5_sheet = table({'Single Cycle'}, E_results_kPa(2), w_targets(2), Pg_targets(2), ...
-        'VariableNames', {'Evaluation_Regime', 'Stiffness_Value_kPa', 'Evaluation_Strain_Target_mm', 'Extracted_Force_Value_g'});
-    
-    t7_sheet = table({'Single Cycle'; 'Single Cycle'; 'Single Cycle'}, ...
-        {'E1_1.67%'; 'E2_3.34%'; 'E3_5.0%'}, ...
-        E_results_kPa(:), ...
-        w_targets(:), ...
-        Pg_targets(:), ...
-        'VariableNames', {'Cycle_Regime', 'Strain_Target_Name', 'Stiffness_Value_kPa', 'Evaluation_Strain_Target_mm', 'Extracted_Force_Value_g'});
-
-    try
-        writetable(t1_sheet, filename_xls, 'Sheet', '1_Deformation_Normal');
-        writetable(t2_sheet, filename_xls, 'Sheet', '2_Deformation_Inverted');
-        writetable(t3_sheet, filename_xls, 'Sheet', '3_Force_Vector');
-        writetable(t4_sheet, filename_xls, 'Sheet', '4_Merged_Plot');
-        writetable(t5_sheet, filename_xls, 'Sheet', '5_Hysteresis_Eval');
-        writetable(t7_sheet, filename_xls, 'Sheet', '7_Strain_Stiffening');
-        fprintf('Excel workbook saved: %s\n', filename_xls);
-    catch ME
-        warning('Failed to save Excel workbook: %s', ME.message);
+        a_R = max(0.001, y_max / (x_max_data^b_R));
+        
+        % Continuous Extension: ensures curve seamlessly connects to E3 target
+        x_max = max(x_max_data, target_max * 1.08);
+        x_plot = linspace(0, x_max, 150)';
+        fit_L = a_L * (x_plot.^b_L);
+        fit_R = a_R * (x_plot.^b_R);
     end
 
-    %% 9. OCT M-Mode Caliper Measurements Figure & Export
-    f_cal = figure('Name', sprintf('OCT M-Mode Caliper Measurements — %s', sampleName), ...
-        'Position', [120, 120, 980, 620], 'Color', 'k');
-    ax_cal = axes('Parent', f_cal);
-    set(ax_cal, 'Color', [0.1 0.1 0.1], 'XColor', 'w', 'YColor', 'w', 'GridColor', [0.3 0.3 0.3]);
-    hold(ax_cal, 'on');
-
-    frames_x = 1:size(data, 1);
-    top_sc = abs(data{:, 5});
-    if size(data, 2) >= 6, bot_sc = abs(data{:, 6}); else, bot_sc = top_sc; end
-    if size(data, 2) >= 7, end_ed = abs(data{:, 7}); else, end_ed = top_sc + (thickness_initial/pixel_to_um); end
-
-    plot(ax_cal, frames_x, top_sc, 'r-', 'LineWidth', 2.0, 'DisplayName', 'top SC');
-    if any(bot_sc ~= top_sc)
-        plot(ax_cal, frames_x, bot_sc, 'y-', 'LineWidth', 2.0, 'DisplayName', 'bot SC');
-    end
-    plot(ax_cal, frames_x, end_ed, 'g-', 'LineWidth', 2.0, 'DisplayName', 'end ED');
-    set(ax_cal, 'YDir', 'reverse'); % Invert Y axis for depth
-
-    % Caliper measurement points
-    cal_pts = [idx_kanan_max, idx_min_global, idx_max_global];
-    cap_w = max(3, round(length(frames_x) * 0.01));
-
-    for p_idx = 1:length(cal_pts)
-        kp = cal_pts(p_idx);
-        y_t = top_sc(kp);
-        y_b = end_ed(kp);
-        th_px = abs(y_b - y_t);
-        th_mm = th_px * pixel_to_um / 1000;
-
-        % Vertical caliper line
-        plot(ax_cal, [kp, kp], [y_t, y_b], 'w-', 'LineWidth', 2.0, 'HandleVisibility', 'off');
-        % Horizontal end caps
-        plot(ax_cal, [kp - cap_w, kp + cap_w], [y_t, y_t], 'w-', 'LineWidth', 2.5, 'HandleVisibility', 'off');
-        plot(ax_cal, [kp - cap_w, kp + cap_w], [y_b, y_b], 'w-', 'LineWidth', 2.5, 'HandleVisibility', 'off');
-
-        % Text annotation badge
-        y_mid = (y_t + y_b) / 2;
-        text(ax_cal, kp + cap_w + 2, y_mid, sprintf('%.3fmm/%dpx', th_mm, round(th_px)), ...
-            'Color', 'w', 'FontSize', 9, 'FontWeight', 'bold', ...
-            'BackgroundColor', 'k', 'EdgeColor', 'w', 'Margin', 2);
-    end
-
-    title(ax_cal, sprintf('OCT M-Mode Caliper Measurements — %s', sampleName), 'Color', 'w', 'FontSize', 12, 'FontWeight', 'bold');
-    xlabel(ax_cal, 'Frame index', 'Color', 'w');
-    ylabel(ax_cal, 'Depth (px)', 'Color', 'w');
-    grid(ax_cal, 'on');
-    lgd_cal = legend(ax_cal, 'Location', 'southwest');
-    set(lgd_cal, 'TextColor', 'w', 'Color', 'k', 'EdgeColor', 'w', 'FontSize', 8);
-    hold(ax_cal, 'off');
-
-    saveHighRes(f_cal, fullfile(outDir, sprintf('%s_OCT_MMode_Caliper_Measurements.png', sampleName)), EXPORT_DPI);
-
-    fprintf('\n================================================================\n');
-    fprintf('  SUCCESS: Analysis Completed for %s\n', sampleName);
-    fprintf('  Results saved to: %s\n', outDir);
-    fprintf('  E1 (1.67%%): %.2f kPa | E2 (3.34%%): %.2f kPa | E3 (5.0%%): %.2f kPa\n', ...
-        E_results_kPa(1), E_results_kPa(2), E_results_kPa(3));
-    fprintf('================================================================\n');
-
-    msgbox(sprintf('Original Analysis complete for %s!\nResults saved to:\n%s', sampleName, outDir), ...
-        'Analysis Success', 'help');
-end
-
-%% Function: High-Resolution Figure Exporter
-function saveHighRes(fig_handle, filepath, dpi)
-    try
-        exportgraphics(fig_handle, filepath, 'Resolution', dpi);
-    catch
-        print(fig_handle, filepath, '-dpng', sprintf('-r%d', dpi));
+    %% Function: High-Resolution Figure Exporter (300 DPI Guard)
+    function saveHighRes(fig_handle, filepath, dpi)
+        try
+            exportgraphics(fig_handle, filepath, 'Resolution', dpi, 'BackgroundColor', 'current');
+        catch
+            print(fig_handle, filepath, '-dpng', sprintf('-r%d', dpi));
+        end
     end
 end

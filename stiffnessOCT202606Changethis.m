@@ -1,4 +1,4 @@
-m function stiffnessOCT202606Changethis()
+function stiffnessOCT202606Changethis()
     % ============================================================
     % CONFIGURATION — Defaults: 3 Waves, Mode 0: Raw, DPI: 300 (High Res)
     % ============================================================
