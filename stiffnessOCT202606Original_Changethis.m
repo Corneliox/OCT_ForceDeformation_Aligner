@@ -251,6 +251,9 @@ function stiffnessOCT202606Original_Changethis()
         if size(data_oct, 2) < 5
             error('timeseries.csv must have at least 5 columns.');
         end
+        pixel_to_um = 1000 / 200; % 5 um/px
+        fps_oct = 25;
+
         data_E_raw = abs(data_oct{:, 5}); 
         if size(data_oct, 2) >= 7
             data_G_raw = abs(data_oct{:, 7});
@@ -260,8 +263,6 @@ function stiffnessOCT202606Original_Changethis()
             thickness_um_all = data_E_raw * pixel_to_um;
         end
         
-        pixel_to_um = 1000 / 200; % 5 um/px
-        fps_oct = 25;
         time_oct_sec = (0:length(data_E_raw)-1)' / fps_oct;
         
         % Original deformation based on layer thickness change
