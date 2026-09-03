@@ -566,7 +566,8 @@ function stiffnessOCT202606Original_Changethis()
             ylabel('Deformation -1 (mm)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
             yyaxis right; plot(time_oct_sec, force_interp_oct, 'b-', 'LineWidth', 2.0, 'DisplayName', 'Auto-Force');
             ylabel('Force (g)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
-            gca().YAxis(1).Color = 'r'; gca().YAxis(2).Color = 'b';
+            ax4 = gca;
+            ax4.YAxis(1).Color = 'r'; ax4.YAxis(2).Color = 'b';
             xlabel('Time (s)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
             title(sprintf('Table 4: Deformation x Auto-Force Merged (%s)', mode_str), 'FontName', FONT_NAME, 'FontSize', 13, 'FontWeight', 'bold', 'Color', fg);
             grid on; box on; fmt_lgd(legend('Location', 'northwest')); hold off; fmt_ax(f_export, gca);
@@ -769,7 +770,8 @@ function stiffnessOCT202606Original_Changethis()
                 clf(f_exp_c, 'reset'); set(0, 'CurrentFigure', f_exp_c); hold on;
                 yyaxis left;  plot(time_c, disp_inv_c, 'r-', 'LineWidth', 2.0); ylabel('Deformation -1 (mm)');
                 yyaxis right; plot(time_c, force_c, 'b-', 'LineWidth', 2.0);   ylabel('Force (g)');
-                gca().YAxis(1).Color = 'r'; gca().YAxis(2).Color = 'b';
+                ax_c4 = gca;
+                ax_c4.YAxis(1).Color = 'r'; ax_c4.YAxis(2).Color = 'b';
                 xlabel('Time (s)');
                 title(sprintf('Table 4: Merged Plot — Cycle %d (%s)', c, mode_str), 'Color', fg, 'FontName', FONT_NAME, 'FontSize', 13, 'FontWeight', 'bold');
                 grid on; box on; hold off; fmt_ax_c(f_exp_c, gca);
