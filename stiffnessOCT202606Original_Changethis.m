@@ -251,14 +251,21 @@ function stiffnessOCT202606Original_Changethis()
         if size(data_oct, 2) < 5
             error('timeseries.csv must have at least 5 columns.');
         end
-        data_E_raw = data_oct{:, 5}; 
+        data_E_raw = abs(data_oct{:, 5}); 
+        if size(data_oct, 2) >= 7
+            data_G_raw = abs(data_oct{:, 7});
+            thickness_um_all = abs(data_G_raw - data_E_raw) * pixel_to_um;
+        else
+            data_G_raw = zeros(size(data_E_raw));
+            thickness_um_all = data_E_raw * pixel_to_um;
+        end
         
         pixel_to_um = 1000 / 200; % 5 um/px
         fps_oct = 25;
         time_oct_sec = (0:length(data_E_raw)-1)' / fps_oct;
         
-        e_um = data_E_raw * pixel_to_um;
-        displacement_mm_temp = abs(e_um - e_um(1)) / 1000;
+        % Original deformation based on layer thickness change
+        displacement_mm_temp = abs(thickness_um_all - thickness_um_all(1)) / 1000;
         
         % ====================================================================
         % 2. INTERACTIVE COORDINATE PINPOINTING (OCT CURVE ONLY)
@@ -333,9 +340,9 @@ function stiffnessOCT202606Original_Changethis()
         % ====================================================================
         % 3. POST-LABELING ORIENTATION & FILTERING
         % ====================================================================
-        displacement_mm_normal = abs(e_um - e_um(idx_titik(1))) / 1000;
-        e_um_inv = -e_um;
-        displacement_mm_inv = (e_um_inv - e_um_inv(idx_titik(1))) / 1000;
+        % Original layer thickness displacement (SC - ED)
+        displacement_mm_normal = abs(thickness_um_all - thickness_um_all(idx_titik(1))) / 1000;
+        displacement_mm_inv    = -displacement_mm_normal;
         
         if FILTER_MODE >= 1
             displacement_mm_normal = smoothdata(displacement_mm_normal, 'sgolay', 25);
@@ -376,7 +383,8 @@ function stiffnessOCT202606Original_Changethis()
         % ====================================================================
         v_poisson = 0.45; a_radius = 2.5; k_factor = 3.085; g_gravity = 9.81;
         part1 = (1 - v_poisson^2) / (2 * a_radius * k_factor);
-        t0_mm = abs(e_um(idx_titik(1))) / 1000;
+        % Original initial layer thickness t0
+        t0_mm = thickness_um_all(idx_titik(1)) / 1000;
         
         w_target_A = (1.67/100) * t0_mm;
         w_target_B = (3.34/100) * t0_mm;
