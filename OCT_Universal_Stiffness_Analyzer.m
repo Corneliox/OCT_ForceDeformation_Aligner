@@ -602,20 +602,33 @@ function OCT_Universal_Stiffness_Analyzer()
         R_disp = 100 + (displacement_mm_inv(idx_titik(1):idx_titik(n_pts)) * 100);
         [X_disp, Y_disp] = pol2cart(theta, R_disp);
 
+        % 5B. ADAPTIVE VISUALIZATION TRIMMING
+        % When 1 wave is selected (N == 1), crop exactly to that 1 wave
+        % (from Start Pull 1 to End Recovery 1) and normalize time to t = 0s.
+        if N == 1
+            idx_vis = idx_titik(1) : idx_titik(3);
+        else
+            idx_vis = idx_titik(1) : idx_titik(n_pts);
+        end
+        time_vis = time_oct_sec(idx_vis) - time_oct_sec(idx_titik(1));
+        disp_norm_vis = displacement_mm_normal(idx_vis);
+        disp_inv_vis  = displacement_mm_inv(idx_vis);
+        force_vis     = force_interp_oct(idx_vis);
+
         % 6. UPDATE LIVE GUI PANELS
-        cla(ax_def_normal); plot(ax_def_normal, time_oct_sec, displacement_mm_normal, 'r-', 'LineWidth', 1.5);
+        cla(ax_def_normal); plot(ax_def_normal, time_vis, disp_norm_vis, 'r-', 'LineWidth', 1.5);
         ylabel(ax_def_normal, 'Deformation Normal (mm)'); grid(ax_def_normal, 'on');
         
-        cla(ax_def_inv); plot(ax_def_inv, time_oct_sec, displacement_mm_inv, 'r-', 'LineWidth', 1.5);
+        cla(ax_def_inv); plot(ax_def_inv, time_vis, disp_inv_vis, 'r-', 'LineWidth', 1.5);
         ylabel(ax_def_inv, 'Deformation x -1 (mm)'); grid(ax_def_inv, 'on');
         
-        cla(ax_force_time); plot(ax_force_time, time_oct_sec, force_interp_oct, 'b-', 'LineWidth', 1.5);
+        cla(ax_force_time); plot(ax_force_time, time_vis, force_vis, 'b-', 'LineWidth', 1.5);
         ylabel(ax_force_time, 'Force (g)'); grid(ax_force_time, 'on');
         
         cla(ax_merged);
-        yyaxis(ax_merged, 'left'); plot(ax_merged, time_oct_sec, displacement_mm_inv, 'r-', 'LineWidth', 1.5);
+        yyaxis(ax_merged, 'left'); plot(ax_merged, time_vis, disp_inv_vis, 'r-', 'LineWidth', 1.5);
         ylabel(ax_merged, 'Deformation -1 (mm)'); ax_merged.YColor = 'r';
-        yyaxis(ax_merged, 'right'); plot(ax_merged, time_oct_sec, force_interp_oct, 'b-', 'LineWidth', 1.5);
+        yyaxis(ax_merged, 'right'); plot(ax_merged, time_vis, force_vis, 'b-', 'LineWidth', 1.5);
         ylabel(ax_merged, 'Force (g)'); ax_merged.YColor = 'b';
         xlabel(ax_merged, 'Time (s)'); grid(ax_merged, 'on');
         
@@ -672,7 +685,7 @@ function OCT_Universal_Stiffness_Analyzer()
 
             % Table 1: Deformation Normal
             clf(f_export, 'reset'); set(0, 'CurrentFigure', f_export); hold on;
-            plot(time_oct_sec, displacement_mm_normal, 'r-', 'LineWidth', 2.0);
+            plot(time_vis, disp_norm_vis, 'r-', 'LineWidth', 2.0);
             title(sprintf('Table 1: Deformation Normal (%s)', mode_str), 'FontName', FONT_NAME, 'FontSize', 13, 'FontWeight', 'bold', 'Color', fg);
             xlabel('Time (s)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
             ylabel('Deformation (mm)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
@@ -681,7 +694,7 @@ function OCT_Universal_Stiffness_Analyzer()
 
             % Table 2: Deformation -1
             clf(f_export, 'reset'); set(0, 'CurrentFigure', f_export); hold on;
-            plot(time_oct_sec, displacement_mm_inv, 'r-', 'LineWidth', 2.0);
+            plot(time_vis, disp_inv_vis, 'r-', 'LineWidth', 2.0);
             title(sprintf('Table 2: Deformation -1 (%s)', mode_str), 'FontName', FONT_NAME, 'FontSize', 13, 'FontWeight', 'bold', 'Color', fg);
             xlabel('Time (s)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
             ylabel('Deformation x -1 (mm)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
@@ -690,7 +703,7 @@ function OCT_Universal_Stiffness_Analyzer()
 
             % Table 3: Force Telemetry
             clf(f_export, 'reset'); set(0, 'CurrentFigure', f_export); hold on;
-            plot(time_oct_sec, force_interp_oct, 'b-', 'LineWidth', 2.0);
+            plot(time_vis, force_vis, 'b-', 'LineWidth', 2.0);
             title(sprintf('Table 3: Force Telemetry (%s)', mode_str), 'FontName', FONT_NAME, 'FontSize', 13, 'FontWeight', 'bold', 'Color', fg);
             xlabel('Time (s)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
             ylabel('Force (g)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
@@ -699,9 +712,9 @@ function OCT_Universal_Stiffness_Analyzer()
 
             % Table 4: Merged Dual-Axis
             clf(f_export, 'reset'); set(0, 'CurrentFigure', f_export); hold on;
-            yyaxis left;  plot(time_oct_sec, displacement_mm_inv, 'r-', 'LineWidth', 2.0, 'DisplayName', 'Deformation -1');
+            yyaxis left;  plot(time_vis, disp_inv_vis, 'r-', 'LineWidth', 2.0, 'DisplayName', 'Deformation -1');
             ylabel('Deformation -1 (mm)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
-            yyaxis right; plot(time_oct_sec, force_interp_oct, 'b-', 'LineWidth', 2.0, 'DisplayName', 'Force');
+            yyaxis right; plot(time_vis, force_vis, 'b-', 'LineWidth', 2.0, 'DisplayName', 'Force');
             ylabel('Force (g)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
             ax4 = gca; ax4.YAxis(1).Color = 'r'; ax4.YAxis(2).Color = 'b';
             xlabel('Time (s)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
@@ -779,21 +792,21 @@ function OCT_Universal_Stiffness_Analyzer()
             set(f_export, 'Position', [100, 100, 1150, 920], 'Color', bg, 'InvertHardcopy', 'off');
 
             ax14a = subplot(3, 2, [1, 2]);
-            scatter(time_oct_sec, displacement_mm_inv, 10, 'r', 'o', 'MarkerFaceAlpha', 0.6, 'MarkerEdgeAlpha', 0.8, 'DisplayName', 'Deformation -1');
+            scatter(time_vis, disp_inv_vis, 10, 'r', 'o', 'MarkerFaceAlpha', 0.6, 'MarkerEdgeAlpha', 0.8, 'DisplayName', 'Deformation -1');
             xlabel('Time (s)'); ylabel('Deformation x -1 (mm)');
             title(sprintf('Row 1 — Deformation -1 (%s)', mode_str), 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold', 'Color', fg);
             grid on; box on; fmt_lgd(legend('Location', 'northeast')); fmt_ax(f_export, ax14a);
 
             ax14b = subplot(3, 2, [3, 4]);
-            scatter(time_oct_sec, force_interp_oct, 10, 'b', 'o', 'MarkerFaceAlpha', 0.6, 'MarkerEdgeAlpha', 0.8, 'DisplayName', 'Force');
+            scatter(time_vis, force_vis, 10, 'b', 'o', 'MarkerFaceAlpha', 0.6, 'MarkerEdgeAlpha', 0.8, 'DisplayName', 'Force');
             xlabel('Time (s)'); ylabel('Force (g)');
             title(sprintf('Row 2 — Force Vector (%s)', mode_str), 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold', 'Color', fg);
             grid on; box on; fmt_lgd(legend('Location', 'northeast')); fmt_ax(f_export, ax14b);
 
             ax14c = subplot(3, 2, 5); hold(ax14c, 'on');
-            yyaxis(ax14c, 'left');  plot(ax14c, time_oct_sec, displacement_mm_inv, 'r-', 'LineWidth', 1.8, 'DisplayName', 'Deformation -1');
+            yyaxis(ax14c, 'left');  plot(ax14c, time_vis, disp_inv_vis, 'r-', 'LineWidth', 1.8, 'DisplayName', 'Deformation -1');
             ylabel(ax14c, 'Deformation -1 (mm)'); ax14c.YAxis(1).Color = 'r';
-            yyaxis(ax14c, 'right'); plot(ax14c, time_oct_sec, force_interp_oct, 'b-', 'LineWidth', 1.8, 'DisplayName', 'Force');
+            yyaxis(ax14c, 'right'); plot(ax14c, time_vis, force_vis, 'b-', 'LineWidth', 1.8, 'DisplayName', 'Force');
             ylabel(ax14c, 'Force (g)'); ax14c.YAxis(2).Color = 'b';
             xlabel(ax14c, 'Time (s)');
             title(ax14c, sprintf('Row 3A — Merged Plot (%s)', mode_str), 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold', 'Color', fg);
@@ -825,10 +838,10 @@ function OCT_Universal_Stiffness_Analyzer()
 
         % Excel Workbook Export
         filename_xls = fullfile(outDir_full, sprintf('%s_Universal_Summary.xlsx', sampleName));
-        t1_sheet = table(time_oct_sec(:), displacement_mm_normal(:), 'VariableNames', {'Time_Seconds', 'Deformation_Normal_mm'});
-        t2_sheet = table(time_oct_sec(:), displacement_mm_inv(:), 'VariableNames', {'Time_Seconds', 'Deformation_Inverted_mm'});
-        t3_sheet = table(time_oct_sec(:), force_interp_oct(:), 'VariableNames', {'Time_Seconds', 'Force_Vector_g'});
-        t4_sheet = table(time_oct_sec(:), displacement_mm_inv(:), force_interp_oct(:), 'VariableNames', {'Time_Seconds', 'Deformation_Inverted_mm', 'Force_Vector_g'});
+        t1_sheet = table(time_vis(:), disp_norm_vis(:), 'VariableNames', {'Time_Seconds', 'Deformation_Normal_mm'});
+        t2_sheet = table(time_vis(:), disp_inv_vis(:), 'VariableNames', {'Time_Seconds', 'Deformation_Inverted_mm'});
+        t3_sheet = table(time_vis(:), force_vis(:), 'VariableNames', {'Time_Seconds', 'Force_Vector_g'});
+        t4_sheet = table(time_vis(:), disp_inv_vis(:), force_vis(:), 'VariableNames', {'Time_Seconds', 'Deformation_Inverted_mm', 'Force_Vector_g'});
         cyc_labels = arrayfun(@(c) sprintf('Cycle %d', c), 1:N, 'UniformOutput', false);
         t5_sheet = table(cyc_labels(:), E_kPa_B(:), tgt_B(:), P_g_B(:), ...
             'VariableNames', {'Evaluation_Regime', 'Stiffness_Value_kPa', 'Evaluation_Strain_Target_mm', 'Extracted_Force_Value_g'});
@@ -990,7 +1003,7 @@ function OCT_Universal_Stiffness_Analyzer()
 
             % Subplot 2
             ax_c2 = subplot(3, 1, 2, 'Parent', f_ov_comp);
-            plot(ax_c2, time_oct_sec, displacement_mm_normal * 1000, 'r-', 'LineWidth', 1.8);
+            plot(ax_c2, time_vis, disp_norm_vis * 1000, 'r-', 'LineWidth', 1.8);
             title(ax_c2, 'Calibrated Surface Deformation (\mum)', 'FontName', FONT_NAME, 'FontSize', 12, 'FontWeight', 'bold', 'Color', fg);
             xlabel(ax_c2, 'Time (seconds)', 'FontName', FONT_NAME, 'FontSize', 10, 'FontWeight', 'bold', 'Color', fg);
             ylabel(ax_c2, 'Deformation (\mum)', 'FontName', FONT_NAME, 'FontSize', 10, 'FontWeight', 'bold', 'Color', fg);
@@ -1000,11 +1013,11 @@ function OCT_Universal_Stiffness_Analyzer()
             % Subplot 3
             ax_c3 = subplot(3, 1, 3, 'Parent', f_ov_comp); hold(ax_c3, 'on');
             yyaxis(ax_c3, 'left');
-            plot(ax_c3, time_oct_sec, displacement_mm_normal, 'r-', 'LineWidth', 1.8, 'DisplayName', 'Deformation (mm)');
+            plot(ax_c3, time_vis, disp_norm_vis, 'r-', 'LineWidth', 1.8, 'DisplayName', 'Deformation (mm)');
             ylabel(ax_c3, 'Deformation (mm)', 'FontName', FONT_NAME, 'FontSize', 10, 'FontWeight', 'bold');
             ax_c3.YAxis(1).Color = 'r';
             yyaxis(ax_c3, 'right');
-            plot(ax_c3, time_oct_sec, force_interp_oct, 'b-', 'LineWidth', 1.8, 'DisplayName', 'Force (g)');
+            plot(ax_c3, time_vis, force_vis, 'b-', 'LineWidth', 1.8, 'DisplayName', 'Force (g)');
             ylabel(ax_c3, 'Force (g)', 'FontName', FONT_NAME, 'FontSize', 10, 'FontWeight', 'bold');
             ax_c3.YAxis(2).Color = 'b';
             xlabel(ax_c3, 'Time (seconds)', 'FontName', FONT_NAME, 'FontSize', 10, 'FontWeight', 'bold', 'Color', fg);
