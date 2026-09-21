@@ -37,7 +37,7 @@ function OCT_Universal_Stiffness_Analyzer()
     lblHeader = uilabel(fig, 'Text', sprintf('OCT Universal Analyzer  |  Waves: %d  |  Dual-Scale Micro-Strain Inset Engine', NUM_CYCLES), ...
         'FontWeight', 'bold', 'FontSize', 14);
     
-    btnBrowse = uibutton(fig, 'Text', 'Browse Folder', 'ButtonPushedFcn', @(btn,event) selectFolder());
+    btnBrowse = uibutton(fig, 'Text', 'Browse Folder', 'ButtonPushedFcn', @(btn,event) browseFolder());
     lblFolder = uilabel(fig, 'Text', 'No folder selected', 'FontColor', [0.3 0.3 0.3]);
     
     lblForceMode = uilabel(fig, 'Text', 'Force Mode:', 'FontWeight', 'bold');
@@ -114,7 +114,7 @@ function OCT_Universal_Stiffness_Analyzer()
 
     function changeForceMode(val)
         FORCE_MODE = val;
-        if ~isempty(parentDir), selectFolder(); end
+        if ~isempty(parentDir), scanAndPopulateSamples(); end
     end
 
     function changeScaleMode(val)
@@ -189,65 +189,126 @@ function OCT_Universal_Stiffness_Analyzer()
         end
     end
     
-    %% Function: Select Folder
-    function selectFolder()
-        if isempty(parentDir)
-            selDir = uigetdir(pwd, 'Select Parent Folder containing OCT sample folders');
-            if isequal(selDir, 0), return; end
-            parentDir = selDir;
+    %% Function: Browse Folder (Always prompts uigetdir)
+    function browseFolder()
+        startDir = pwd;
+        if ~isempty(parentDir) && exist(parentDir, 'dir')
+            startDir = parentDir;
         end
+        selDir = uigetdir(startDir, 'Select Parent Folder containing OCT sample folders');
+        if isequal(selDir, 0), return; end
+        parentDir = selDir;
         lblFolder.Text = parentDir;
-        
-        % Check for direct timeseries.csv
+        scanAndPopulateSamples();
+    end
+
+    %% Function: Universal Multi-Pattern Sample Scanner (100% Reliable Detection)
+    function scanAndPopulateSamples()
+        if isempty(parentDir) || ~exist(parentDir, 'dir')
+            lstSamples.Items = {};
+            validSamples = {};
+            lblStatus.Text = 'Status: Please select a valid folder.';
+            return;
+        end
+
+        tempList = {};
+        tempDisplay = {};
+        seenSamples = containers.Map();
+
+        % 1. Check if parentDir itself contains timeseries.csv directly
         direct_csv = fullfile(parentDir, 'timeseries.csv');
         if exist(direct_csv, 'file')
             [~, sampleName] = fileparts(parentDir);
-            sampleName = regexprep(sampleName, '_analysis$', '');
-            paired_csv = fullfile(parentDir, sprintf('%s.csv', sampleName));
-            validSamples = {{sampleName, direct_csv, paired_csv}};
-            lstSamples.Items = {sprintf('[Ready] Sample: %s', sampleName)};
-            lblStatus.Text = 'Status: 1 direct sample detected.';
-            return;
+            sampleName = regexprep(sampleName, '_analysis$', '', 'ignorecase');
+            pumpFile = findPumpFile(parentDir, parentDir, sampleName);
+            seenSamples(sampleName) = true;
+            tempList{end+1} = {sampleName, direct_csv, pumpFile};
+            tempDisplay{end+1} = formatDisplay(sampleName, pumpFile);
         end
+
+        % 2. Comprehensive Search: All subdirectories containing timeseries.csv
+        all_csv = dir(fullfile(parentDir, '**', 'timeseries.csv'));
         
-        % Search for *_analysis folders
-        subDirs = dir(fullfile(parentDir, '*_analysis'));
-        subDirs = subDirs([subDirs.isdir]);
-        tempList = {};
-        tempDisplay = {};
-        
-        for i = 1:length(subDirs)
-            folderName = subDirs(i).name;
-            baseName = regexprep(folderName, '_analysis$', '');
-            octFile = fullfile(parentDir, folderName, 'timeseries.csv');
-            pumpFile = fullfile(parentDir, sprintf('%s.csv', baseName));
+        for k = 1:length(all_csv)
+            csvPath = fullfile(all_csv(k).folder, all_csv(k).name);
+            containingFolder = all_csv(k).folder;
+
+            % Ignore results, build, and internal folders
+            if contains(containingFolder, 'Analysis_Results', 'IgnoreCase', true) || ...
+               contains(containingFolder, 'Hasil_Analisis', 'IgnoreCase', true) || ...
+               contains(containingFolder, 'Hasil_Rekonstruksi', 'IgnoreCase', true) || ...
+               contains(containingFolder, [filesep, '_out'], 'IgnoreCase', true) || ...
+               contains(containingFolder, '.git', 'IgnoreCase', true)
+                continue;
+            end
+
+            % Derive clean sample name
+            [~, fldName] = fileparts(containingFolder);
+            cleanName = regexprep(fldName, '_analysis$', '', 'ignorecase');
             
-            if exist(octFile, 'file')
-                if FORCE_MODE == 2 && ~exist(pumpFile, 'file')
-                    tempDisplay{end+1} = sprintf('[No Pump CSV] Sample: %s', baseName); %#ok<AGROW>
-                else
-                    tempList{end+1} = {baseName, octFile, pumpFile}; %#ok<AGROW>
-                    tempDisplay{end+1} = sprintf('[Ready] Sample: %s', baseName); %#ok<AGROW>
+            % If containingFolder is a subfolder (e.g. parentDir/SampleA/SampleA_analysis)
+            [parentOfContaining, ~] = fileparts(containingFolder);
+            if ~strcmp(parentOfContaining, parentDir) && strcmpi(fldName, [cleanName, '_analysis'])
+                [~, outerFld] = fileparts(parentOfContaining);
+                if ~isempty(outerFld) && ~strcmp(outerFld, '.')
+                    cleanName = regexprep(outerFld, '_analysis$', '', 'ignorecase');
                 end
             end
-        end
-        
-        % Fallback recursive search
-        if isempty(tempList)
-            all_csv = dir(fullfile(parentDir, '**', 'timeseries.csv'));
-            for k = 1:length(all_csv)
-                [~, fldName] = fileparts(all_csv(k).folder);
-                baseName = regexprep(fldName, '_analysis$', '');
-                octFile = fullfile(all_csv(k).folder, all_csv(k).name);
-                pumpFile = fullfile(parentDir, sprintf('%s.csv', baseName));
-                tempList{end+1} = {baseName, octFile, pumpFile}; %#ok<AGROW>
-                tempDisplay{end+1} = sprintf('[Ready] Sample: %s', baseName); %#ok<AGROW>
+
+            if isKey(seenSamples, cleanName)
+                continue; % Avoid duplicates
             end
+            seenSamples(cleanName) = true;
+
+            % Locate pump file
+            pumpFile = findPumpFile(parentDir, containingFolder, cleanName);
+
+            tempList{end+1} = {cleanName, csvPath, pumpFile}; %#ok<AGROW>
+            tempDisplay{end+1} = formatDisplay(cleanName, pumpFile); %#ok<AGROW>
         end
-        
+
+        % Sort samples alphabetically
+        if ~isempty(tempList)
+            [~, sortIdx] = sort(cellfun(@(x) x{1}, tempList, 'UniformOutput', false));
+            tempList = tempList(sortIdx);
+            tempDisplay = tempDisplay(sortIdx);
+        end
+
         validSamples = tempList;
         lstSamples.Items = tempDisplay;
-        lblStatus.Text = sprintf('Status: %d sample(s) ready for processing.', length(validSamples));
+        lblStatus.Text = sprintf('Status: %d sample(s) successfully detected & ready.', length(validSamples));
+    end
+
+    function pumpFile = findPumpFile(pDir, sDir, sName)
+        pumpFile = '';
+        cand1 = fullfile(pDir, sprintf('%s.csv', sName));
+        cand2 = fullfile(sDir, sprintf('%s.csv', sName));
+        cand3 = fullfile(sDir, '..', sprintf('%s.csv', sName));
+        
+        if exist(cand1, 'file')
+            pumpFile = cand1;
+        elseif exist(cand2, 'file')
+            pumpFile = cand2;
+        elseif exist(cand3, 'file')
+            pumpFile = cand3;
+        else
+            f_csv = dir(fullfile(pDir, sprintf('*%s*.csv', sName)));
+            if ~isempty(f_csv)
+                pumpFile = fullfile(f_csv(1).folder, f_csv(1).name);
+            end
+        end
+    end
+
+    function dispStr = formatDisplay(sName, pFile)
+        if FORCE_MODE == 1
+            dispStr = sprintf('[Ready] %s  (Auto-Force)', sName);
+        else
+            if ~isempty(pFile) && exist(pFile, 'file')
+                dispStr = sprintf('[Ready] %s  (Paired CSV)', sName);
+            else
+                dispStr = sprintf('[No CSV -> Auto Fallback] %s', sName);
+            end
+        end
     end
     
     %% Function: Process All Samples
