@@ -371,27 +371,47 @@ function OCT_Universal_Stiffness_Analyzer()
         % Smooth surface movement for clean, noiseless annotation
         displacement_annot = smoothdata(displacement_surface_mm, 'sgolay', 15);
 
-        % 2. INTERACTIVE COORDINATE PINPOINTING (SMOOTH SURFACE CURVE)
+        % 2. INTERACTIVE COORDINATE PINPOINTING
         hFig = figure('Name', sprintf('Cycle Partition Annotation (%d Waves): %s', N, sampleName), ...
             'Position', [100, 100, 1100, 520], 'Color', 'w');
         
         ax_annot = axes('Parent', hFig);
-        plot(ax_annot, time_oct_sec, displacement_annot, 'b-', 'LineWidth', 2.0); grid(ax_annot, 'on');
-        ylabel(ax_annot, 'Deformation (mm)', 'FontWeight', 'bold');
+        hold(ax_annot, 'on'); grid(ax_annot, 'on');
+
+        if N == 1
+            % Classic Gilang Skin Thickness Reference: Downward depression (valley)
+            curve_annot = -data_E_raw;
+            plot(ax_annot, time_oct_sec, curve_annot, 'b-', 'LineWidth', 2.0, 'DisplayName', 'Stratum Corneum');
+            if size(data_oct, 2) >= 7
+                plot(ax_annot, time_oct_sec, -data_G_raw, 'r-', 'LineWidth', 1.5, 'DisplayName', 'Epidermis');
+            end
+            ylabel(ax_annot, 'Pixel (Depth)', 'FontWeight', 'bold');
+            title(ax_annot, sprintf('Skin Thickness Analysis: %s', sampleName), 'FontWeight', 'bold');
+            legend(ax_annot, 'Location', 'northeast');
+            
+            labels_oct = {'1. First Maximum (Start Baseline)', ...
+                          '2. Minimum (Max Indentation Valley)', ...
+                          '3. Second Maximum (Recovery Baseline)'};
+        else
+            % Multi-Wave Smooth Surface Displacement
+            curve_annot = displacement_annot;
+            plot(ax_annot, time_oct_sec, curve_annot, 'b-', 'LineWidth', 2.0, 'DisplayName', 'Surface Displacement');
+            ylabel(ax_annot, 'Deformation (mm)', 'FontWeight', 'bold');
+            legend(ax_annot, 'Location', 'northeast');
+            
+            labels_oct = cell(1, n_pts);
+            labels_oct{1} = 'Start Pull 1';
+            for c = 1:N
+                labels_oct{2*c}   = sprintf('Peak (Max Pull) %d', c);
+                labels_oct{2*c+1} = sprintf('End Recovery %d', c);
+            end
+        end
         xlabel(ax_annot, 'Time (seconds)', 'FontWeight', 'bold');
-        hold(ax_annot, 'on');
         
         x_oct = zeros(n_pts, 1);
         h_oct_plots  = cell(1, n_pts);
         h_oct_texts  = cell(1, n_pts);
         h_oct_guides = cell(1, n_pts);
-        
-        labels_oct = cell(1, n_pts);
-        labels_oct{1} = 'Start Pull 1';
-        for c = 1:N
-            labels_oct{2*c}   = sprintf('Peak (Max Pull) %d', c);
-            labels_oct{2*c+1} = sprintf('End Recovery %d', c);
-        end
         
         k = 1;
         while k <= n_pts
@@ -423,7 +443,7 @@ function OCT_Universal_Stiffness_Analyzer()
             idx_curr = min([find(time_oct_sec >= x_val, 1, 'first'), length(time_oct_sec)]);
             if isempty(idx_curr), idx_curr = 1; end
             x_snap = time_oct_sec(idx_curr);
-            y_snap = displacement_annot(idx_curr);
+            y_snap = curve_annot(idx_curr);
             
             x_oct(k) = x_snap;
             h_oct_guides{k} = plot(ax_annot, [x_val, x_snap], [y_val, y_snap], 'm--', 'LineWidth', 1.2);
@@ -626,10 +646,17 @@ function OCT_Universal_Stiffness_Analyzer()
         ylabel(ax_force_time, 'Force (g)'); grid(ax_force_time, 'on');
         
         cla(ax_merged);
-        yyaxis(ax_merged, 'left'); plot(ax_merged, time_vis, disp_inv_vis, 'r-', 'LineWidth', 1.5);
+        d_max_val = max(abs(disp_inv_vis)); if d_max_val == 0, d_max_val = 0.1; end
+        f_max_val = max(force_vis);         if f_max_val == 0, f_max_val = 1.0; end
+
+        yyaxis(ax_merged, 'left');  plot(ax_merged, time_vis, disp_inv_vis, 'r-', 'LineWidth', 1.5);
         ylabel(ax_merged, 'Deformation -1 (mm)'); ax_merged.YColor = 'r';
+        ylim(ax_merged, [-d_max_val * 1.15, d_max_val * 0.15]);
+
         yyaxis(ax_merged, 'right'); plot(ax_merged, time_vis, force_vis, 'b-', 'LineWidth', 1.5);
         ylabel(ax_merged, 'Force (g)'); ax_merged.YColor = 'b';
+        ylim(ax_merged, [-f_max_val * 0.15, f_max_val * 1.15]);
+
         xlabel(ax_merged, 'Time (s)'); grid(ax_merged, 'on');
         
         cla(ax_hyst_final); hold(ax_hyst_final, 'on');
@@ -710,12 +737,19 @@ function OCT_Universal_Stiffness_Analyzer()
             grid on; box on; hold off; fmt_ax(f_export, gca);
             saveHighRes(f_export, fullfile(outDir_full, sprintf('%s_Table3_Force_Vector_%s.png', sampleName, mode_str)), EXPORT_DPI);
 
-            % Table 4: Merged Dual-Axis
+            % Table 4: Merged Dual-Axis (Crossing Pattern)
             clf(f_export, 'reset'); set(0, 'CurrentFigure', f_export); hold on;
+            d_max_val = max(abs(disp_inv_vis)); if d_max_val == 0, d_max_val = 0.1; end
+            f_max_val = max(force_vis);         if f_max_val == 0, f_max_val = 1.0; end
+
             yyaxis left;  plot(time_vis, disp_inv_vis, 'r-', 'LineWidth', 2.0, 'DisplayName', 'Deformation -1');
             ylabel('Deformation -1 (mm)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
+            ylim([-d_max_val * 1.15, d_max_val * 0.15]);
+
             yyaxis right; plot(time_vis, force_vis, 'b-', 'LineWidth', 2.0, 'DisplayName', 'Force');
             ylabel('Force (g)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
+            ylim([-f_max_val * 0.15, f_max_val * 1.15]);
+
             ax4 = gca; ax4.YAxis(1).Color = 'r'; ax4.YAxis(2).Color = 'b';
             xlabel('Time (s)', 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold');
             title(sprintf('Table 4: Deformation x Force Merged (%s)', mode_str), 'FontName', FONT_NAME, 'FontSize', 13, 'FontWeight', 'bold', 'Color', fg);
@@ -806,8 +840,12 @@ function OCT_Universal_Stiffness_Analyzer()
             ax14c = subplot(3, 2, 5); hold(ax14c, 'on');
             yyaxis(ax14c, 'left');  plot(ax14c, time_vis, disp_inv_vis, 'r-', 'LineWidth', 1.8, 'DisplayName', 'Deformation -1');
             ylabel(ax14c, 'Deformation -1 (mm)'); ax14c.YAxis(1).Color = 'r';
+            ylim(ax14c, [-d_max_val * 1.15, d_max_val * 0.15]);
+
             yyaxis(ax14c, 'right'); plot(ax14c, time_vis, force_vis, 'b-', 'LineWidth', 1.8, 'DisplayName', 'Force');
             ylabel(ax14c, 'Force (g)'); ax14c.YAxis(2).Color = 'b';
+            ylim(ax14c, [-f_max_val * 0.15, f_max_val * 1.15]);
+
             xlabel(ax14c, 'Time (s)');
             title(ax14c, sprintf('Row 3A — Merged Plot (%s)', mode_str), 'FontName', FONT_NAME, 'FontSize', 11, 'FontWeight', 'bold', 'Color', fg);
             grid(ax14c, 'on'); box(ax14c, 'on'); fmt_lgd(legend(ax14c, 'Location', 'northwest')); hold(ax14c, 'off'); fmt_ax(f_export, ax14c);
@@ -902,8 +940,15 @@ function OCT_Universal_Stiffness_Analyzer()
 
                 % Table 4 Cycle c
                 clf(f_exp_c, 'reset'); set(0, 'CurrentFigure', f_exp_c); hold on;
+                d_c_val = max(abs(disp_inv_c)); if d_c_val == 0, d_c_val = 0.1; end
+                f_c_val = max(force_c);         if f_c_val == 0, f_c_val = 1.0; end
+
                 yyaxis left;  plot(time_c, disp_inv_c, 'r-', 'LineWidth', 2.0); ylabel('Deformation -1 (mm)');
+                ylim([-d_c_val * 1.15, d_c_val * 0.15]);
+
                 yyaxis right; plot(time_c, force_c, 'b-', 'LineWidth', 2.0);   ylabel('Force (g)');
+                ylim([-f_c_val * 0.15, f_c_val * 1.15]);
+
                 ax_c4 = gca; ax_c4.YAxis(1).Color = 'r'; ax_c4.YAxis(2).Color = 'b';
                 xlabel('Time (s)');
                 title(sprintf('Table 4: Merged Plot — Cycle %d (%s)', c, mode_str), 'Color', fg, 'FontName', FONT_NAME, 'FontSize', 13, 'FontWeight', 'bold');
@@ -1010,21 +1055,28 @@ function OCT_Universal_Stiffness_Analyzer()
             set(ax_c2, 'FontName', FONT_NAME, 'FontSize', 9, 'FontWeight', 'bold', 'Color', bg, 'XColor', fg, 'YColor', fg, 'GridColor', grid_clr);
             grid(ax_c2, 'on'); box(ax_c2, 'on');
 
-            % Subplot 3
+            % Subplot 3: Deformation x Force Merged (Crossing Pattern)
             ax_c3 = subplot(3, 1, 3, 'Parent', f_ov_comp); hold(ax_c3, 'on');
+            d_max_val = max(abs(disp_inv_vis)); if d_max_val == 0, d_max_val = 0.1; end
+            f_max_val = max(force_vis);         if f_max_val == 0, f_max_val = 1.0; end
+
             yyaxis(ax_c3, 'left');
-            plot(ax_c3, time_vis, disp_norm_vis, 'r-', 'LineWidth', 1.8, 'DisplayName', 'Deformation (mm)');
-            ylabel(ax_c3, 'Deformation (mm)', 'FontName', FONT_NAME, 'FontSize', 10, 'FontWeight', 'bold');
+            plot(ax_c3, time_vis, disp_inv_vis, 'r-', 'LineWidth', 1.8, 'DisplayName', 'Deformation -1 (mm)');
+            ylabel(ax_c3, 'Deformation -1 (mm)', 'FontName', FONT_NAME, 'FontSize', 10, 'FontWeight', 'bold');
+            ylim(ax_c3, [-d_max_val * 1.15, d_max_val * 0.15]);
             ax_c3.YAxis(1).Color = 'r';
+
             yyaxis(ax_c3, 'right');
             plot(ax_c3, time_vis, force_vis, 'b-', 'LineWidth', 1.8, 'DisplayName', 'Force (g)');
             ylabel(ax_c3, 'Force (g)', 'FontName', FONT_NAME, 'FontSize', 10, 'FontWeight', 'bold');
+            ylim(ax_c3, [-f_max_val * 0.15, f_max_val * 1.15]);
             ax_c3.YAxis(2).Color = 'b';
+
             xlabel(ax_c3, 'Time (seconds)', 'FontName', FONT_NAME, 'FontSize', 10, 'FontWeight', 'bold', 'Color', fg);
-            title(ax_c3, 'Deformation & Force vs Time', 'FontName', FONT_NAME, 'FontSize', 12, 'FontWeight', 'bold', 'Color', fg);
+            title(ax_c3, 'Deformation x Force Merged (Crossing Pattern)', 'FontName', FONT_NAME, 'FontSize', 12, 'FontWeight', 'bold', 'Color', fg);
             set(ax_c3, 'FontName', FONT_NAME, 'FontSize', 9, 'FontWeight', 'bold', 'Color', bg, 'XColor', fg, 'GridColor', grid_clr);
             grid(ax_c3, 'on'); box(ax_c3, 'on');
-            legend(ax_c3, 'Location', 'northeast', 'FontSize', 8, 'TextColor', fg, 'Color', bg, 'EdgeColor', fg);
+            legend(ax_c3, 'Location', 'northwest', 'FontSize', 8, 'TextColor', fg, 'Color', bg, 'EdgeColor', fg);
             hold(ax_c3, 'off');
 
             sgtitle(sprintf('OCT 3-Subplot Pipeline Overview — %s (%s)', sampleName, mode_str), ...
