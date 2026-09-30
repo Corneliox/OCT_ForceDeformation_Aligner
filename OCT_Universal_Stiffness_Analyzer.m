@@ -472,13 +472,64 @@ function OCT_Universal_Stiffness_Analyzer()
         force_interp_oct = zeros(size(time_oct_sec));
         
         if FORCE_MODE == 2 && exist(pumpFile, 'file')
-            % Paired CSV Force Mode
-            data_pump = readtable(pumpFile);
-            force_raw = data_pump{:, end};
-            time_pump = (0:length(force_raw)-1)' / 25;
-            force_interp_oct = interp1(time_pump, force_raw, time_oct_sec, 'pchip', 'extrap');
-            force_interp_oct = max(0, force_interp_oct);
-        else
+            % Paired CSV Force Mode with Automated Multi-Cycle Time-Warping
+            try
+                data_pump = readtable(pumpFile);
+                force_raw = data_pump{:, end};
+                if iscell(force_raw), force_raw = str2double(force_raw); end
+                force_raw = max(0, force_raw - min(force_raw));
+                
+                % Detect N cycles in pump signal
+                [idx_pump, ok_pump] = extract_pump_cycles(force_raw, N);
+                
+                if ok_pump
+                    for c = 1:N
+                        i_s = idx_titik(2*c - 1);
+                        i_p = idx_titik(2*c);
+                        i_e = idx_titik(2*c + 1);
+                        
+                        j_s = idx_pump(2*c - 1);
+                        j_p = idx_pump(2*c);
+                        j_e = idx_pump(2*c + 1);
+                        
+                        % Loading segment (warp pump loading to OCT loading)
+                        f_L = force_raw(j_s:j_p);
+                        n_L = max(2, i_p - i_s + 1);
+                        if length(f_L) >= 2
+                            force_interp_oct(i_s:i_p) = interp1(linspace(0, 1, length(f_L)), f_L, linspace(0, 1, n_L), 'pchip')';
+                        else
+                            force_interp_oct(i_s:i_p) = mean(f_L);
+                        end
+                        
+                        % Recovery segment (warp pump recovery to OCT recovery)
+                        f_R = force_raw(j_p:j_e);
+                        n_R = max(2, i_e - i_p + 1);
+                        if length(f_R) >= 2
+                            force_interp_oct(i_p:i_e) = interp1(linspace(0, 1, length(f_R)), f_R, linspace(0, 1, n_R), 'pchip')';
+                        else
+                            force_interp_oct(i_p:i_e) = mean(f_R);
+                        end
+                    end
+                else
+                    % Robust fallback: normalize pump duration across total annotated OCT duration
+                    if size(data_pump, 2) >= 2 && data_pump{end, 1} > 100
+                        time_pump = data_pump{:, 1} / 1000;
+                    else
+                        time_pump = (0:length(force_raw)-1)' / 10;
+                    end
+                    time_pump_rel = (time_pump - time_pump(1)) / max(0.001, (time_pump(end) - time_pump(1)));
+                    
+                    n_oct_total = idx_titik(n_pts) - idx_titik(1) + 1;
+                    force_mapped = interp1(time_pump_rel, force_raw, linspace(0, 1, n_oct_total), 'pchip', 'extrap')';
+                    force_interp_oct(idx_titik(1):idx_titik(n_pts)) = max(0, force_mapped);
+                end
+            catch ME
+                warning('Failed reading paired pump file %s: %s. Falling back to auto-modeled force.', pumpFile, ME.message);
+                FORCE_MODE = 1;
+            end
+        end
+        
+        if FORCE_MODE == 1 || all(force_interp_oct == 0)
             % Auto-Modeled Force (0-1g Parabolic per cycle)
             for c = 1:N
                 i_start = idx_titik(2*c - 1);
@@ -1122,6 +1173,67 @@ function OCT_Universal_Stiffness_Analyzer()
             exportgraphics(fig_handle, filepath, 'Resolution', dpi, 'BackgroundColor', 'current');
         catch
             print(fig_handle, filepath, '-dpng', sprintf('-r%d', dpi));
+        end
+    end
+
+    %% Function: Automated Pump Cycle Detection (Start, Peak, End per Cycle)
+    function [idx_pump, ok] = extract_pump_cycles(f_vec, num_cycles)
+        idx_pump = zeros(2*num_cycles + 1, 1);
+        ok = false;
+        if isempty(f_vec) || max(f_vec) <= 0
+            return;
+        end
+        
+        f_max = max(f_vec);
+        % Smooth with gaussian filter to eliminate high-frequency vibration
+        f_sm = smoothdata(f_vec, 'gaussian', 5);
+        
+        % Distance threshold between pump cycle peaks (at least 15 samples)
+        min_dist = max(15, round(length(f_vec) / (num_cycles * 3.5)));
+        
+        % Try finding peaks with prominence >= 25% of max
+        [pks, locs] = findpeaks(f_sm, 'MinPeakProminence', f_max * 0.25, 'MinPeakDistance', min_dist);
+        if length(locs) < num_cycles
+            [pks, locs] = findpeaks(f_sm, 'MinPeakProminence', f_max * 0.15, 'MinPeakDistance', min_dist);
+        end
+        if length(locs) < num_cycles
+            [pks, locs] = findpeaks(f_sm, 'MinPeakHeight', f_max * 0.4, 'MinPeakDistance', min_dist);
+        end
+        
+        if length(locs) >= num_cycles
+            % Select top num_cycles peaks sorted chronologically
+            if length(locs) > num_cycles
+                [~, p_rank] = sort(pks, 'descend');
+                sel_locs = sort(locs(p_rank(1:num_cycles)));
+            else
+                sel_locs = locs;
+            end
+            
+            thresh_base = min(f_sm) + 0.08 * (f_max - min(f_sm));
+            
+            % Start of cycle 1: find where signal drops to baseline before first peak
+            pre_start = find(f_sm(1:sel_locs(1)) <= thresh_base, 1, 'last');
+            if isempty(pre_start), pre_start = 1; end
+            idx_pump(1) = pre_start;
+            
+            for c = 1:num_cycles
+                idx_pump(2*c) = sel_locs(c); % Peak c
+                
+                if c < num_cycles
+                    % Trough between peak c and peak c+1
+                    [~, rel_min] = min(f_sm(sel_locs(c) : sel_locs(c+1)));
+                    idx_pump(2*c + 1) = sel_locs(c) + rel_min - 1;
+                else
+                    % End of last cycle
+                    post_end = find(f_sm(sel_locs(num_cycles):end) <= thresh_base, 1, 'first');
+                    if isempty(post_end)
+                        idx_pump(2*num_cycles + 1) = length(f_vec);
+                    else
+                        idx_pump(2*num_cycles + 1) = sel_locs(num_cycles) + post_end - 1;
+                    end
+                end
+            end
+            ok = true;
         end
     end
 end
