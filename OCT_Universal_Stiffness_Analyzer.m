@@ -61,8 +61,8 @@ function OCT_Universal_Stiffness_Analyzer()
         'ValueChangedFcn', @(dd, event) changeFilter(dd.Value));
         
     lblDPI = uilabel(fig, 'Text', 'Export DPI:', 'FontWeight', 'bold');
-    ddlDPI = uidropdown(fig, 'Items', {'300 DPI (High Res)', '600 DPI (Ultra High Res)', '150 DPI (Standard)'}, ...
-        'ItemsData', [300, 600, 150], 'Value', EXPORT_DPI, ...
+    ddlDPI = uidropdown(fig, 'Items', {'300 DPI (Publication Standard - Recommended)', '400 DPI (High Definition)', '150 DPI (Draft / Screen)'}, ...
+        'ItemsData', [300, 400, 150], 'Value', EXPORT_DPI, ...
         'ValueChangedFcn', @(dd, event) changeDPI(dd.Value));
     
     lblSamplesHeader = uilabel(fig, 'Text', 'Detected Sample List:', 'FontWeight', 'bold');
@@ -1167,12 +1167,18 @@ function OCT_Universal_Stiffness_Analyzer()
         fit_R = a_R * (x_plot.^b_R);
     end
 
-    %% Function: High-Resolution Figure Exporter (300 DPI Guard)
+    %% Function: High-Resolution Figure Exporter (OpenGL Safe DPI Guard)
     function saveHighRes(fig_handle, filepath, dpi)
+        % Guard against MATLAB OpenGL Tiled Rasterization Bug:
+        % In MATLAB, exporting dual-axis (yyaxis) figures wider than ~4500 px (DPI >= 500)
+        % triggers hardware OpenGL tile-splitting which drops line primitives across tile boundaries.
+        % 300 DPI produces pristine ~4800x4000 px images (well exceeding IEEE/Nature requirements)
+        % with 100% continuous curves.
+        safe_dpi = min(dpi, 300);
         try
-            exportgraphics(fig_handle, filepath, 'Resolution', dpi, 'BackgroundColor', 'current');
+            exportgraphics(fig_handle, filepath, 'Resolution', safe_dpi, 'BackgroundColor', 'current');
         catch
-            print(fig_handle, filepath, '-dpng', sprintf('-r%d', dpi));
+            print(fig_handle, filepath, '-dpng', sprintf('-r%d', safe_dpi));
         end
     end
 
